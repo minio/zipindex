@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"io/ioutil"
 )
 
 // SET GO111MODULE=off&&go-fuzz-build -o=fuzz-build.zip&&go-fuzz -minimize=5s -timeout=60 -bin=fuzz-build.zip -workdir=fuzz
@@ -83,7 +84,7 @@ func Fuzz(b []byte) int {
 		defer rc.Close()
 
 		// Read the zip file content.
-		io.ReadAll(rc)
+		ioutil.ReadAll(rc)
 	}
 
 	return 1

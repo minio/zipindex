@@ -45,7 +45,6 @@ const (
 	directory64LocLen        = 20         //
 	directory64EndLen        = 56         // + extra
 	dataDescriptorLen        = 16
-	dataDescriptor64Len      = 24 // descriptor with 8 byte sizes
 
 	// Constants for the first byte in CreatorVersion.
 	creatorFAT    = 0

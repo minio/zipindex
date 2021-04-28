@@ -471,7 +471,7 @@ func FindSerialized(b []byte, name string) (*File, error) {
 				}
 				cur.Custom, err = readCustomData(custom)
 				if err != nil {
-					err = msgp.WrapError(err, fmt.Sprintf("Custom Data"))
+					err = msgp.WrapError(err, "Custom Data")
 					return nil, err
 				}
 			default:

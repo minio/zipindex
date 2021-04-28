@@ -24,7 +24,7 @@ import (
 	"io"
 )
 
-// SET GO111_MODULE=off&&go-fuzz-build -o=fuzz-build.zip&&go-fuzz -minimize=5s -timeout=60 -bin=fuzz-build.zip -workdir=fuzz
+// SET GO111MODULE=off&&go-fuzz-build -o=fuzz-build.zip&&go-fuzz -minimize=5s -timeout=60 -bin=fuzz-build.zip -workdir=fuzz
 
 // Fuzz a roundtrip.
 func Fuzz(b []byte) int {
@@ -40,7 +40,7 @@ func Fuzz(b []byte) int {
 	var files Files
 	var err error
 	for {
-		files, err = ReadDir(b[len(b)-sz:], int64(len(b)))
+		files, err = ReadDir(b[len(b)-sz:], int64(len(b)), nil)
 		if err == nil {
 			break
 		}
@@ -66,26 +66,25 @@ func Fuzz(b []byte) int {
 	if len(files) == 0 {
 		return 0
 	}
-	file := files[0]
+	for _, file := range files {
+		// Create a reader with entire zip file...
+		rs := bytes.NewReader(b)
+		// Seek to the file offset.
+		_, err = rs.Seek(file.Offset, io.SeekStart)
+		if err != nil {
+			continue
+		}
 
-	// Create a reader with entire zip file...
-	rs := bytes.NewReader(b)
-	// Seek to the file offset.
-	_, err = rs.Seek(file.Offset, io.SeekStart)
-	if err != nil {
-		return 0
+		// Provide the forwarded reader..
+		rc, err := file.Open(rs)
+		if err != nil {
+			continue
+		}
+		defer rc.Close()
+
+		// Read the zip file content.
+		io.ReadAll(rc)
 	}
-
-	// Provide the forwarded reader..
-	rc, err := file.Open(rs)
-	if err != nil {
-		return 1
-	}
-	defer rc.Close()
-
-	// Read the zip file content.
-	io.ReadAll(rc)
-	exitOnErr(err)
 
 	return 1
 }

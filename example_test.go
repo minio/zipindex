@@ -212,7 +212,7 @@ func ExampleDeserializeFiles() {
 	defer rc.Close()
 
 	// Read the zip file content.
-	content, err := io.ReadAll(rc)
+	content, err := ioutil.ReadAll(rc)
 	exitOnErr(err)
 
 	fmt.Printf("File content is '%s'\n", string(content))

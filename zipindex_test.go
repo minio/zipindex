@@ -20,7 +20,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
-	"io"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
@@ -143,8 +142,8 @@ func TestReadDir(t *testing.T) {
 				}
 				defer rc.Close()
 				defer wantRC.Close()
-				wantData, wantErr := io.ReadAll(wantRC)
-				gotData, err := io.ReadAll(rc)
+				wantData, wantErr := ioutil.ReadAll(wantRC)
+				gotData, err := ioutil.ReadAll(rc)
 				if err != nil {
 					if err != wantErr {
 						continue

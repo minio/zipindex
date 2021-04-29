@@ -121,19 +121,19 @@ type ZipDirEntry struct {
 	// When writing, an extended timestamp (which is timezone-agnostic) is
 	// always emitted. The legacy MS-DOS date field is encoded according to the
 	// location of the Modified time.
-	Modified     time.Time
-	ModifiedTime uint16 // Deprecated: Legacy MS-DOS date; use Modified instead.
-	ModifiedDate uint16 // Deprecated: Legacy MS-DOS time; use Modified instead.
+	Modified time.Time
 
 	CRC32              uint32
-	CompressedSize     uint32 // Deprecated: Use CompressedSize64 instead.
-	UncompressedSize   uint32 // Deprecated: Use UncompressedSize64 instead.
 	CompressedSize64   uint64
 	UncompressedSize64 uint64
 	Extra              []byte
 	ExternalAttrs      uint32 // Meaning depends on CreatorVersion
 
-	headerOffset int64
+	headerOffset     int64
+	compressedSize   uint32 // Deprecated: Use CompressedSize64 instead.
+	uncompressedSize uint32 // Deprecated: Use UncompressedSize64 instead.
+	modifiedTime     uint16 // Deprecated: Legacy MS-DOS date; use Modified instead.
+	modifiedDate     uint16 // Deprecated: Legacy MS-DOS time; use Modified instead.
 }
 
 type directoryEnd struct {

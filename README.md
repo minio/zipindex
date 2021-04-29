@@ -3,7 +3,7 @@
 [![Go Reference](https://pkg.go.dev/badge/minio/zipindex.svg)](https://pkg.go.dev/github.com/minio/zipindex)
 [![Go](https://github.com/minio/zipindex/actions/workflows/go.yml/badge.svg)](https://github.com/minio/zipindex/actions/workflows/go.yml)
 
-`zipindex` provides a size optimized representation of a zip file to allow
+`zipindex` provides a size optimized representation of a zip file directory to allow
 decompressing the file without reading the zip file index.
 
 It will only provide the minimal needed data for successful decompression and CRC checks.

@@ -354,13 +354,13 @@ func readDirectoryHeader(f *ZipDirEntry, r io.Reader) error {
 	f.ReaderVersion = b.uint16()
 	f.Flags = b.uint16()
 	f.Method = b.uint16()
-	f.ModifiedTime = b.uint16()
-	f.ModifiedDate = b.uint16()
+	f.modifiedTime = b.uint16()
+	f.modifiedDate = b.uint16()
 	f.CRC32 = b.uint32()
-	f.CompressedSize = b.uint32()
-	f.UncompressedSize = b.uint32()
-	f.CompressedSize64 = uint64(f.CompressedSize)
-	f.UncompressedSize64 = uint64(f.UncompressedSize)
+	f.compressedSize = b.uint32()
+	f.uncompressedSize = b.uint32()
+	f.CompressedSize64 = uint64(f.compressedSize)
+	f.UncompressedSize64 = uint64(f.uncompressedSize)
 	filenameLen := int(b.uint16())
 	extraLen := int(b.uint16())
 	commentLen := int(b.uint16())
@@ -393,8 +393,8 @@ func readDirectoryHeader(f *ZipDirEntry, r io.Reader) error {
 		f.NonUTF8 = f.Flags&0x800 == 0
 	}
 
-	needUSize := f.UncompressedSize == ^uint32(0)
-	needCSize := f.CompressedSize == ^uint32(0)
+	needUSize := f.uncompressedSize == ^uint32(0)
+	needCSize := f.compressedSize == ^uint32(0)
 	needHeaderOffset := f.headerOffset == int64(^uint32(0))
 
 	// Best effort to find what we need.
@@ -476,7 +476,7 @@ parseExtras:
 		}
 	}
 
-	msdosModified := msDosTimeToTime(f.ModifiedDate, f.ModifiedTime)
+	msdosModified := msDosTimeToTime(f.modifiedDate, f.modifiedTime)
 	f.Modified = msdosModified
 	if !modified.IsZero() {
 		f.Modified = modified.UTC()
@@ -489,7 +489,7 @@ parseExtras:
 		// determining whether extended timestamps are present.
 		// This is necessary for users that need to do additional time
 		// calculations when dealing with legacy ZIP formats.
-		if f.ModifiedTime != 0 || f.ModifiedDate != 0 {
+		if f.modifiedTime != 0 || f.modifiedDate != 0 {
 			f.Modified = modified.In(timeZone(msdosModified.Sub(modified)))
 		}
 	}

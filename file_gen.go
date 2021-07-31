@@ -260,7 +260,7 @@ func (z *File) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
-func (z *Files) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *files) DecodeMsg(dc *msgp.Reader) (err error) {
 	var zb0002 uint32
 	zb0002, err = dc.ReadArrayHeader()
 	if err != nil {
@@ -270,7 +270,7 @@ func (z *Files) DecodeMsg(dc *msgp.Reader) (err error) {
 	if cap((*z)) >= int(zb0002) {
 		(*z) = (*z)[:zb0002]
 	} else {
-		(*z) = make(Files, zb0002)
+		(*z) = make(files, zb0002)
 	}
 	for zb0001 := range *z {
 		err = (*z)[zb0001].DecodeMsg(dc)
@@ -283,7 +283,7 @@ func (z *Files) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z Files) EncodeMsg(en *msgp.Writer) (err error) {
+func (z files) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteArrayHeader(uint32(len(z)))
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -300,7 +300,7 @@ func (z Files) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z Files) MarshalMsg(b []byte) (o []byte, err error) {
+func (z files) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	for zb0003 := range z {
@@ -314,7 +314,7 @@ func (z Files) MarshalMsg(b []byte) (o []byte, err error) {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Files) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *files) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0002 uint32
 	zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
@@ -324,7 +324,7 @@ func (z *Files) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	if cap((*z)) >= int(zb0002) {
 		(*z) = (*z)[:zb0002]
 	} else {
-		(*z) = make(Files, zb0002)
+		(*z) = make(files, zb0002)
 	}
 	for zb0001 := range *z {
 		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
@@ -338,7 +338,7 @@ func (z *Files) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z Files) Msgsize() (s int) {
+func (z files) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
 	for zb0003 := range z {
 		s += z[zb0003].Msgsize()

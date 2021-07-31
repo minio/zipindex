@@ -77,7 +77,11 @@ func (f *File) OpenRaw(r io.Reader) (io.Reader, error) {
 }
 
 // Files is a collection of files.
+//msgp:ignore Files
 type Files []File
+
+// unexported type to hide generated serialization functions.
+type files []File
 
 // Any changes to the file format MUST cause an increment here and MUST
 // be backwards compatible.
@@ -103,7 +107,7 @@ type filesAsStructs struct {
 // Serialize the files.
 func (f Files) Serialize() ([]byte, error) {
 	if len(f) < 10 {
-		payload, err := f.MarshalMsg(nil)
+		payload, err := files(f).MarshalMsg(nil)
 		if err != nil {
 			return nil, err
 		}
@@ -233,9 +237,9 @@ func DeserializeFiles(b []byte) (Files, error) {
 		return nil, err
 	}
 	if !structs {
-		var dst Files
+		var dst files
 		_, err = dst.UnmarshalMsg(b)
-		return dst, err
+		return Files(dst), err
 	}
 
 	var dst filesAsStructs

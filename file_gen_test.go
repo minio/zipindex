@@ -122,8 +122,8 @@ func BenchmarkDecodeFile(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalFiles(t *testing.T) {
-	v := Files{}
+func TestMarshalUnmarshalfiles(t *testing.T) {
+	v := files{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -145,8 +145,8 @@ func TestMarshalUnmarshalFiles(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgFiles(b *testing.B) {
-	v := Files{}
+func BenchmarkMarshalMsgfiles(b *testing.B) {
+	v := files{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -154,8 +154,8 @@ func BenchmarkMarshalMsgFiles(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgFiles(b *testing.B) {
-	v := Files{}
+func BenchmarkAppendMsgfiles(b *testing.B) {
+	v := files{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -166,8 +166,8 @@ func BenchmarkAppendMsgFiles(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalFiles(b *testing.B) {
-	v := Files{}
+func BenchmarkUnmarshalfiles(b *testing.B) {
+	v := files{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -180,17 +180,17 @@ func BenchmarkUnmarshalFiles(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeFiles(t *testing.T) {
-	v := Files{}
+func TestEncodeDecodefiles(t *testing.T) {
+	v := files{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeFiles Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodefiles Msgsize() is inaccurate")
 	}
 
-	vn := Files{}
+	vn := files{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -204,8 +204,8 @@ func TestEncodeDecodeFiles(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeFiles(b *testing.B) {
-	v := Files{}
+func BenchmarkEncodefiles(b *testing.B) {
+	v := files{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -218,8 +218,8 @@ func BenchmarkEncodeFiles(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeFiles(b *testing.B) {
-	v := Files{}
+func BenchmarkDecodefiles(b *testing.B) {
+	v := files{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))

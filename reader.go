@@ -257,7 +257,7 @@ func (r *checksumReader) Read(b []byte) (n int, err error) {
 				} else {
 					err = err1
 				}
-			} else if r.hash.Sum32() != r.f.CRC32 {
+			} else if r.f.CRC32 != 0 && r.hash.Sum32() != r.f.CRC32 {
 				err = ErrChecksum
 			}
 		}
@@ -325,7 +325,10 @@ func readDataDescriptor(r io.Reader, f *File) error {
 		return err
 	}
 	b := readBuf(buf[:12])
-	if b.uint32() != f.CRC32 {
+	if f.CRC32 == 0 {
+		// If not already set, update...
+		f.CRC32 = b.uint32()
+	} else if b.uint32() != f.CRC32 {
 		return ErrChecksum
 	}
 

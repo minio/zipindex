@@ -56,6 +56,7 @@ func TestReadDir(t *testing.T) {
 		"winxp.zip",
 		"zip64.zip",
 		"zip64-2.zip",
+		"smallish.zip",
 	}
 	for _, test := range testSet {
 		t.Run(test, func(t *testing.T) {
@@ -97,6 +98,7 @@ func TestReadDir(t *testing.T) {
 				t.Logf("wanted more: %d bytes from end...", more.FromEnd)
 				sz = int(more.FromEnd)
 			}
+			files.OptimizeSize()
 			ser, err := files.Serialize()
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
@@ -140,12 +142,17 @@ func TestReadDir(t *testing.T) {
 				if wantErr != nil {
 					t.Errorf("want error, like %v, got none", wantErr)
 				}
-				defer rc.Close()
-				defer wantRC.Close()
+				defer func() {
+					wantErr := wantRC.Close()
+					gotErr := rc.Close()
+					if wantErr != gotErr {
+						t.Errorf("err mismatch: %v != %v", wantErr, gotErr)
+					}
+				}()
 				wantData, wantErr := ioutil.ReadAll(wantRC)
 				gotData, err := ioutil.ReadAll(rc)
 				if err != nil {
-					if err != wantErr {
+					if err == wantErr {
 						continue
 					}
 					t.Error("got error:", err)
@@ -154,6 +161,7 @@ func TestReadDir(t *testing.T) {
 				if !bytes.Equal(wantData, gotData) {
 					t.Error("data mismatch")
 				}
+				t.Logf("%s ok", file.Name)
 			}
 		})
 	}

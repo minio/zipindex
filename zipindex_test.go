@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestReadDir(t *testing.T) {
@@ -57,6 +59,7 @@ func TestReadDir(t *testing.T) {
 		"zip64.zip",
 		"zip64-2.zip",
 		"smallish.zip",
+		"zstd-compressed.zip",
 	}
 	for _, test := range testSet {
 		t.Run(test, func(t *testing.T) {
@@ -73,6 +76,8 @@ func TestReadDir(t *testing.T) {
 				}
 				return
 			}
+			// TODO: Use zstd one when https://github.com/klauspost/compress/pull/539 is released.
+			zr.RegisterDecompressor(zstd.ZipMethodWinZip, newZstdReader)
 			sz := 8 << 10
 			if sz > len(input) {
 				// Truncate a bit from the start...

@@ -77,64 +77,14 @@ func (r *pooledFlateReader) Close() error {
 	return err
 }
 
-var zstdReaderPool sync.Pool
-
-// newZstdReader creates a pooled zip decompressor.
-func newZstdReader(r io.Reader) io.ReadCloser {
-	dec, ok := zstdReaderPool.Get().(*zstd.Decoder)
-	if ok {
-		dec.Reset(r)
-	} else {
-		d, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true), zstd.WithDecoderMaxWindow(128<<20))
-		if err != nil {
-			panic(err)
-		}
-		dec = d
-	}
-	return &pooledZipReader{dec: dec}
-}
-
-type pooledZipReader struct {
-	mu  sync.Mutex // guards Close and Read
-	dec *zstd.Decoder
-}
-
-func (r *pooledZipReader) Read(p []byte) (n int, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.dec == nil {
-		return 0, errors.New("read after close or EOF")
-	}
-	dec, err := r.dec.Read(p)
-	if err == io.EOF {
-		r.dec.Reset(nil)
-		zstdReaderPool.Put(r.dec)
-		r.dec = nil
-	}
-	return dec, err
-}
-
-func (r *pooledZipReader) Close() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	var err error
-	if r.dec != nil {
-		err = r.dec.Reset(nil)
-		zstdReaderPool.Put(r.dec)
-		r.dec = nil
-	}
-	return err
-}
-
 var (
 	decompressors sync.Map // map[uint16]Decompressor
 )
 
 func init() {
-	decompressors.Store(Store, Decompressor(ioutil.NopCloser))
-	decompressors.Store(Deflate, Decompressor(newFlateReader))
-	// TODO: Use zstd one when https://github.com/klauspost/compress/pull/539 is released.
-	decompressors.Store(uint16(zstd.ZipMethodWinZip), Decompressor(newZstdReader))
+	RegisterDecompressor(Store, ioutil.NopCloser)
+	RegisterDecompressor(Deflate, newFlateReader)
+	RegisterDecompressor(zstd.ZipMethodWinZip, zstd.ZipDecompressor(zstd.WithDecoderLowmem(true)))
 }
 
 // RegisterDecompressor allows custom decompressors for a specified method ID.

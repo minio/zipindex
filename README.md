@@ -70,16 +70,25 @@ To open an individual file from the index use the `(*File).Open(r io.Reader)` wi
 forwarded Reader to open the content.
 
 Similar to [stdlib zip](https://golang.org/pkg/archive/zip/), not all methods/flags may be supported. 
-Use `zipfile.RegisterDecompressor` to register non-standard decompressors.
 
 For expert users, `(*File).OpenRaw` allows access to the compressed data.
 
+## Compression Methods
+
+By default zipindex keeps files stored uncompressed or deflate compressed.
+This covers the most commonly seen compression methods.
+
+Furthermore files compressed with [zstandard](https://facebook.github.io/zstd/) 
+as method 93 will be preserved and can be read back.
+
+Use [`RegisterDecompressor`](https://pkg.go.dev/github.com/minio/zipindex#RegisterDecompressor) 
+to register non-standard decompressors.
+
 ## License
 
-`zipindex` is released under the Apache License v2.0. You can find the complete text in the file LICENSE.
+zipindex is released under the Apache License v2.0. You can find the complete text in the file LICENSE.
 
-`zipindex` contains code that is Copyright (c) 2009 The Go Authors. See `GO_LICENSE` file for license.
-Parts are
+zipindex contains code that is Copyright (c) 2009 The Go Authors. See `GO_LICENSE` file for license.
 
 ## Contributing
 

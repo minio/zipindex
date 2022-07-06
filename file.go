@@ -90,7 +90,7 @@ const currentVerCompressed = 2
 const currentVerCompressedStructs = 3
 
 var zstdEnc, _ = zstd.NewWriter(nil, zstd.WithWindowSize(128<<10), zstd.WithEncoderConcurrency(2), zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
-var zstdDec, _ = zstd.NewReader(nil, zstd.WithDecoderLowmem(true), zstd.WithDecoderConcurrency(2))
+var zstdDec, _ = zstd.NewReader(nil, zstd.WithDecoderLowmem(true), zstd.WithDecoderConcurrency(2), zstd.WithDecoderMaxMemory(MaxIndexSize), zstd.WithDecoderMaxWindow(8<<20))
 
 //msgp:tuple filesAsStructs
 type filesAsStructs struct {
@@ -106,7 +106,16 @@ type filesAsStructs struct {
 
 // Serialize the files.
 func (f Files) Serialize() ([]byte, error) {
+	if len(f) > MaxFiles {
+		return nil, ErrTooManyFiles
+	}
+
 	if len(f) < 10 {
+		for _, file := range f {
+			if len(file.Custom) > MaxCustomEntries {
+				return nil, ErrTooManyCustomEntries
+			}
+		}
 		payload, err := files(f).MarshalMsg(nil)
 		if err != nil {
 			return nil, err
@@ -150,6 +159,9 @@ func (f Files) Serialize() ([]byte, error) {
 		x.Flags[i] = file.Flags
 		binary.LittleEndian.PutUint32(x.Crcs[i*4:], file.CRC32)
 		if len(file.Custom) > 0 {
+			if len(file.Custom) > MaxCustomEntries {
+				return nil, ErrTooManyCustomEntries
+			}
 			x.Custom[i] = msgp.AppendMapStrStr(nil, file.Custom)
 		}
 	}
@@ -214,6 +226,9 @@ func unpackPayload(b []byte) ([]byte, bool, error) {
 	if len(b) < 1 {
 		return nil, false, io.ErrUnexpectedEOF
 	}
+	if len(b) > MaxIndexSize {
+		return nil, false, ErrMaxSizeExceeded
+	}
 	var out []byte
 	switch b[0] {
 	case currentVerPlain:
@@ -221,6 +236,10 @@ func unpackPayload(b []byte) ([]byte, bool, error) {
 	case currentVerCompressed, currentVerCompressedStructs:
 		decoded, err := zstdDec.DecodeAll(b[1:], nil)
 		if err != nil {
+			switch err {
+			case zstd.ErrDecoderSizeExceeded, zstd.ErrWindowSizeExceeded:
+				err = ErrMaxSizeExceeded
+			}
 			return nil, false, err
 		}
 		out = decoded
@@ -238,6 +257,14 @@ func DeserializeFiles(b []byte) (Files, error) {
 	}
 	if !structs {
 		var dst files
+		// Check number of files.
+		nFiles, _, err := msgp.ReadArrayHeaderBytes(b)
+		if nFiles > 100 {
+			return nil, ErrTooManyFiles
+		}
+		if err != nil {
+			return nil, err
+		}
 		_, err = dst.UnmarshalMsg(b)
 		return Files(dst), err
 	}
@@ -246,6 +273,7 @@ func DeserializeFiles(b []byte) (Files, error) {
 	if _, err = dst.UnmarshalMsg(b); err != nil {
 		return nil, err
 	}
+
 	files := make(Files, len(dst.Names))
 	var cur File
 	for i := range files {
@@ -278,6 +306,10 @@ func readCustomData(bts []byte) (dst map[string]string, err error) {
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Custom")
+		return
+	}
+	if zb0002 > MaxCustomEntries {
+		err = msgp.WrapError(ErrTooManyCustomEntries, "Custom", zb0002)
 		return
 	}
 	dst = make(map[string]string, zb0002)
@@ -315,6 +347,9 @@ func FindSerialized(b []byte, name string) (*File, error) {
 		if err != nil {
 			return nil, err
 		}
+		if n > 100 {
+			return nil, ErrTooManyFiles
+		}
 		var f File
 		for i := 0; i < int(n); i++ {
 			buf, err = f.UnmarshalMsg(buf)
@@ -347,6 +382,9 @@ func FindSerialized(b []byte, name string) (*File, error) {
 	if err != nil {
 		err = msgp.WrapError(err, "Names")
 		return nil, err
+	}
+	if nFiles > MaxFiles {
+		return nil, ErrTooManyFiles
 	}
 
 	// We accumulate values needed for cur as we parse...
@@ -484,4 +522,271 @@ func FindSerialized(b []byte, name string) (*File, error) {
 		}
 	}
 	return &cur, nil
+}
+
+//msgp:unmarshal ignore File
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (f *File) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 8 {
+		err = msgp.ArrayError{Wanted: 8, Got: zb0001}
+		return
+	}
+	f.Name, bts, err = msgp.ReadStringBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Name")
+		return
+	}
+	f.CompressedSize64, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "CompressedSize64")
+		return
+	}
+	f.UncompressedSize64, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "UncompressedSize64")
+		return
+	}
+	f.Offset, bts, err = msgp.ReadInt64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Offset")
+		return
+	}
+	f.CRC32, bts, err = msgp.ReadUint32Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "CRC32")
+		return
+	}
+	f.Method, bts, err = msgp.ReadUint16Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Method")
+		return
+	}
+	f.Flags, bts, err = msgp.ReadUint16Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags")
+		return
+	}
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Custom")
+		return
+	}
+	if zb0002 > MaxCustomEntries {
+		err = msgp.WrapError(ErrTooManyCustomEntries, "Custom", zb0002)
+		return
+	}
+	if f.Custom == nil {
+		f.Custom = make(map[string]string, zb0002)
+	} else if len(f.Custom) > 0 {
+		for key := range f.Custom {
+			delete(f.Custom, key)
+		}
+	}
+	for zb0002 > 0 {
+		var za0001 string
+		var za0002 string
+		zb0002--
+		za0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Custom")
+			return
+		}
+		za0002, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Custom", za0001)
+			return
+		}
+		f.Custom[za0001] = za0002
+	}
+	o = bts
+	return
+}
+
+//msgp:unmarshal ignore filesAsStructs
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *filesAsStructs) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 8 {
+		err = msgp.ArrayError{Wanted: 8, Got: zb0001}
+		return
+	}
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Names")
+		return
+	}
+	if zb0002 > MaxFiles {
+		err = msgp.WrapError(err, "ErrTooManyFiles", zb0002)
+		return
+	}
+	if cap(z.Names) >= int(zb0002) {
+		z.Names = (z.Names)[:zb0002]
+	} else {
+		z.Names = make([][]byte, zb0002)
+	}
+	for za0001 := range z.Names {
+		z.Names[za0001], bts, err = msgp.ReadBytesBytes(bts, z.Names[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, "Names", za0001)
+			return
+		}
+	}
+	var zb0003 uint32
+	zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "CSizes")
+		return
+	}
+	if zb0003 != zb0002 {
+		err = msgp.WrapError(errors.New("field number mismatch"), "CSizes", zb0003)
+		return
+	}
+	if cap(z.CSizes) >= int(zb0003) {
+		z.CSizes = (z.CSizes)[:zb0003]
+	} else {
+		z.CSizes = make([]int64, zb0003)
+	}
+	for za0002 := range z.CSizes {
+		z.CSizes[za0002], bts, err = msgp.ReadInt64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "CSizes", za0002)
+			return
+		}
+	}
+	var zb0004 uint32
+	zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "USizes")
+		return
+	}
+	if zb0004 != zb0002 {
+		err = msgp.WrapError(errors.New("field number mismatch"), "USizes", zb0004)
+		return
+	}
+
+	if cap(z.USizes) >= int(zb0004) {
+		z.USizes = (z.USizes)[:zb0004]
+	} else {
+		z.USizes = make([]int64, zb0004)
+	}
+	for za0003 := range z.USizes {
+		z.USizes[za0003], bts, err = msgp.ReadInt64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "USizes", za0003)
+			return
+		}
+	}
+	var zb0005 uint32
+	zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Offsets")
+		return
+	}
+	if zb0005 != zb0002 {
+		err = msgp.WrapError(errors.New("field number mismatch"), "Offsets", zb0005)
+		return
+	}
+
+	if cap(z.Offsets) >= int(zb0005) {
+		z.Offsets = (z.Offsets)[:zb0005]
+	} else {
+		z.Offsets = make([]int64, zb0005)
+	}
+	for za0004 := range z.Offsets {
+		z.Offsets[za0004], bts, err = msgp.ReadInt64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Offsets", za0004)
+			return
+		}
+	}
+	var zb0006 uint32
+	zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Methods")
+		return
+	}
+	if zb0006 != zb0002 {
+		err = msgp.WrapError(errors.New("field number mismatch"), "Methods", zb0006)
+		return
+	}
+	if cap(z.Methods) >= int(zb0006) {
+		z.Methods = (z.Methods)[:zb0006]
+	} else {
+		z.Methods = make([]uint16, zb0006)
+	}
+	for za0005 := range z.Methods {
+		z.Methods[za0005], bts, err = msgp.ReadUint16Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Methods", za0005)
+			return
+		}
+	}
+	var zb0007 uint32
+	zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags")
+		return
+	}
+	if zb0007 != zb0002 {
+		err = msgp.WrapError(errors.New("field number mismatch"), "Flags", zb0007)
+		return
+	}
+
+	if cap(z.Flags) >= int(zb0007) {
+		z.Flags = (z.Flags)[:zb0007]
+	} else {
+		z.Flags = make([]uint16, zb0007)
+	}
+	for za0006 := range z.Flags {
+		z.Flags[za0006], bts, err = msgp.ReadUint16Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Flags", za0006)
+			return
+		}
+	}
+	z.Crcs, bts, err = msgp.ReadBytesBytes(bts, z.Crcs)
+	if err != nil {
+		err = msgp.WrapError(err, "Crcs")
+		return
+	}
+	var zb0008 uint32
+	zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Custom")
+		return
+	}
+	if zb0008 != zb0002 {
+		err = msgp.WrapError(errors.New("field number mismatch"), "Custom")
+		return
+	}
+
+	if cap(z.Custom) >= int(zb0008) {
+		z.Custom = (z.Custom)[:zb0008]
+	} else {
+		z.Custom = make([][]byte, zb0008)
+	}
+	for za0007 := range z.Custom {
+		z.Custom[za0007], bts, err = msgp.ReadBytesBytes(bts, z.Custom[za0007])
+		if err != nil {
+			err = msgp.WrapError(err, "Custom", za0007)
+			return
+		}
+	}
+	o = bts
+	return
 }

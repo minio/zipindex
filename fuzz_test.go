@@ -70,9 +70,6 @@ func FuzzRoundtrip(f *testing.F) {
 		}
 		// Serialize files to binary.
 		serialized, err := files.Serialize()
-		if errors.Is(err, ErrTooManyFiles) {
-			return
-		}
 		exitOnErr(err)
 
 		// Deserialize the content.

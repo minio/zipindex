@@ -103,7 +103,6 @@ func FuzzRoundtrip(f *testing.F) {
 			// Read the zip file content.
 			ioutil.ReadAll(rc)
 		}
-		return
 	})
 }
 
@@ -133,6 +132,9 @@ func addBytesFromZip(f *testing.F, filename string) {
 		f.Fatal(err)
 	}
 	zr, err := zip.NewReader(file, fi.Size())
+	if err != nil {
+		f.Fatal(err)
+	}
 	for _, file := range zr.File {
 		rc, err := file.Open()
 		if err != nil {

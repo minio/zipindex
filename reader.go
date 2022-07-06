@@ -94,7 +94,9 @@ func ReadDir(buf []byte, zipSize int64, filter FileFilter) (Files, error) {
 	if filter == nil {
 		filter = DefaultFileFilter
 	}
-
+	if end.directoryRecords > MaxFiles {
+		return nil, ErrTooManyFiles
+	}
 	files := make([]File, 0, end.directoryRecords)
 	wantAtEnd := zipSize - int64(end.directoryOffset)
 	if wantAtEnd > int64(len(buf)) {
@@ -111,6 +113,9 @@ func ReadDir(buf []byte, zipSize int64, filter FileFilter) (Files, error) {
 	var f ZipDirEntry
 	var file File
 	for {
+		if len(files) > MaxFiles {
+			return nil, ErrTooManyFiles
+		}
 		f = ZipDirEntry{}
 		err = readDirectoryHeader(&f, bufR)
 		if err == ErrFormat || err == io.ErrUnexpectedEOF {

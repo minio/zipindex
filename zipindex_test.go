@@ -60,6 +60,8 @@ func TestReadDir(t *testing.T) {
 		"zip64-2.zip",
 		"smallish.zip",
 		"zstd-compressed.zip",
+		"fuzz/FuzzDeserializeFiles.zip",
+		"fuzz/FuzzRoundtrip.zip",
 	}
 	for _, test := range testSet {
 		t.Run(test, func(t *testing.T) {

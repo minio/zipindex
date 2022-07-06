@@ -78,8 +78,7 @@ func TestReadDir(t *testing.T) {
 				}
 				return
 			}
-			// TODO: Use zstd one when https://github.com/klauspost/compress/pull/539 is released.
-			zr.RegisterDecompressor(zstd.ZipMethodWinZip, newZstdReader)
+			zr.RegisterDecompressor(zstd.ZipMethodWinZip, zstd.ZipDecompressor(zstd.WithDecoderLowmem(true)))
 			sz := 8 << 10
 			if sz > len(input) {
 				// Truncate a bit from the start...
@@ -111,6 +110,7 @@ func TestReadDir(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
+			t.Log("Serialized size:", len(ser), "Files:", len(files))
 			files, err = DeserializeFiles(ser)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)

@@ -36,14 +36,14 @@ func BenchmarkFindSerialized(b *testing.B) {
 			for i := range files {
 				rng.Read(tmp[:])
 				f := File{
-					Name:               hex.EncodeToString(tmp[:]),
+					Name:               "files/" + hex.EncodeToString(tmp[:]) + ".txt",
 					CRC32:              rng.Uint32(),
 					Method:             Deflate,
 					Flags:              2,
 					Offset:             off,
 					UncompressedSize64: uint64(rng.Intn(64 << 10)),
 				}
-				f.CompressedSize64 = f.CompressedSize64 / 2
+				f.CompressedSize64 = f.UncompressedSize64 / 2
 				off += int64(f.UncompressedSize64) + int64(len(f.Name)+20+rng.Intn(40))
 				files[i] = f
 			}

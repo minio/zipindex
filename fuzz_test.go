@@ -1,5 +1,5 @@
-//+build go1.18
 //go:build go1.18
+// +build go1.18
 
 /*
  * zipindex, (C)2021 MinIO, Inc.
@@ -33,8 +33,6 @@ import (
 	"strconv"
 	"testing"
 )
-
-//var n uint32
 
 // Fuzz a roundtrip.
 func FuzzRoundtrip(f *testing.F) {

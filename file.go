@@ -175,7 +175,7 @@ func (f Files) Serialize() ([]byte, error) {
 }
 
 // Sort files by offset in zip file.
-// Typically directories are already sorted by offset.
+// Typically, directories are already sorted by offset.
 // This will usually provide the smallest possible serialized size.
 func (f Files) Sort() {
 	less := func(i, j int) bool {

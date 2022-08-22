@@ -116,6 +116,7 @@ func TestReadDir(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
+			var nFiles int
 			for _, file := range zr.File {
 				if !file.Mode().IsRegular() {
 					if files.Find(file.Name) != nil {
@@ -123,6 +124,7 @@ func TestReadDir(t *testing.T) {
 					}
 					continue
 				}
+				nFiles++
 				gotFile := files.Find(file.Name)
 				if gotFile == nil {
 					t.Errorf(" could not find regular file %v", file.Name)
@@ -168,7 +170,9 @@ func TestReadDir(t *testing.T) {
 				if !bytes.Equal(wantData, gotData) {
 					t.Error("data mismatch")
 				}
-				t.Logf("%s ok", file.Name)
+			}
+			if nFiles > 0 {
+				t.Logf("%.02f bytes/file", float64(len(ser))/float64(nFiles))
 			}
 		})
 	}

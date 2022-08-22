@@ -25,12 +25,15 @@ package zipindex
 import (
 	"os"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // Compression methods.
 const (
-	Store   uint16 = 0 // no compression
-	Deflate uint16 = 8 // DEFLATE compressed
+	Store   uint16 = 0                    // no compression
+	Deflate uint16 = 8                    // DEFLATE compressed
+	Zstd    uint16 = zstd.ZipMethodWinZip // Zstd in zip.
 )
 
 const (

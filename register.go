@@ -84,7 +84,7 @@ var (
 func init() {
 	RegisterDecompressor(Store, ioutil.NopCloser)
 	RegisterDecompressor(Deflate, newFlateReader)
-	RegisterDecompressor(zstd.ZipMethodWinZip, zstd.ZipDecompressor(zstd.WithDecoderLowmem(true)))
+	RegisterDecompressor(Zstd, zstd.ZipDecompressor(zstd.WithDecoderLowmem(true)))
 }
 
 // RegisterDecompressor allows custom decompressors for a specified method ID.

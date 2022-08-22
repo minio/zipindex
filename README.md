@@ -3,12 +3,15 @@
 [![Go Reference](https://pkg.go.dev/badge/minio/zipindex.svg)](https://pkg.go.dev/github.com/minio/zipindex)
 [![Go](https://github.com/minio/zipindex/actions/workflows/go.yml/badge.svg)](https://github.com/minio/zipindex/actions/workflows/go.yml)
 
-`zipindex` provides a size optimized representation of a zip file to allow
+`zipindex` provides a size optimized representation of a zip file directory to allow
 decompressing the file without reading the zip file index.
 
 It will only provide the minimal needed data for successful decompression and CRC checks.
 
 Custom metadata can be stored per file and filtering can be performed on the incoming files.
+
+Currently, up to 100 million files per zip file is supported.
+If a streaming format is added, this limit may be lifted.
 
 ## Usage
 
@@ -63,7 +66,7 @@ type File struct {
 }
 ```
 
-First an `io.Reader` *must* be forwarded to the absolute offset in `Offset` before. 
+First an `io.Reader` *must* be forwarded to the absolute offset in `Offset`. 
 It is up to the caller to decide how to achieve that.
 
 To open an individual file from the index use the `(*File).Open(r io.Reader)` with the 
@@ -75,10 +78,10 @@ For expert users, `(*File).OpenRaw` allows access to the compressed data.
 
 ## Compression Methods
 
-By default zipindex keeps files stored uncompressed or deflate compressed.
+By default, zipindex keeps files stored uncompressed or deflate compressed.
 This covers the most commonly seen compression methods.
 
-Furthermore files compressed with [zstandard](https://facebook.github.io/zstd/) 
+Furthermore, files compressed with [zstandard](https://facebook.github.io/zstd/) 
 as method 93 will be preserved and can be read back.
 
 Use [`RegisterDecompressor`](https://pkg.go.dev/github.com/minio/zipindex#RegisterDecompressor) 

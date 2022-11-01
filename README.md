@@ -4,7 +4,7 @@
 [![Go](https://github.com/minio/zipindex/actions/workflows/go.yml/badge.svg)](https://github.com/minio/zipindex/actions/workflows/go.yml)
 
 `zipindex` provides a size optimized representation of a zip file directory to allow
-decompressing the file without reading the zip file index.
+decompressing files inside a ZIP file without reading the file index every file.
 
 It will only provide the minimal needed data for successful decompression and CRC checks.
 
@@ -22,7 +22,8 @@ Indexing is performed on the last part of a complete ZIP file.
 Three methods can be used:
 
 The `zipindex.ReadDir` function allows parsing from a raw buffer from the end of the file. 
-If this isn't enough to read the directory `zipindex.ErrNeedMoreData` is returned.
+If this isn't enough to read the directory `zipindex.ErrNeedMoreData` is returned, which will
+return how much data is needed to read the directory.
 
 Alternatively, `zipindex.ReadFile` will open a file on disk and read the directory from that.
 
@@ -48,7 +49,11 @@ or to find a single file `zipindex.FindSerialized` can be used.
 
 See examples in the [documentation](https://pkg.go.dev/github.com/minio/zipindex)
 
-## Accessing file content
+## Accessing File Content
+
+To read a file, you will need 1) the serialized index and once you have gotten the information
+for the file you want to decompress form the ZIP file, you will need to forward the zip file to the offset
+specified by the information returned from the index.
 
 A file contains the following information:
 
@@ -86,6 +91,7 @@ as method 93 will be preserved and can be read back.
 
 Use [`RegisterDecompressor`](https://pkg.go.dev/github.com/minio/zipindex#RegisterDecompressor) 
 to register non-standard decompressors.
+
 
 ## License
 

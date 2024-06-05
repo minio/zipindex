@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 	"unicode/utf8"
@@ -206,7 +205,7 @@ func ReadFile(name string, filter FileFilter) (Files, error) {
 		if err != nil {
 			return nil, err
 		}
-		b, err := ioutil.ReadAll(f)
+		b, err := io.ReadAll(f)
 		if err != nil {
 			return nil, err
 		}
@@ -254,7 +253,7 @@ func (r *checksumReader) Read(b []byte) (n int, err error) {
 
 		if r.f.hasDataDescriptor() {
 			// If any compressed data remains, read it.
-			io.Copy(ioutil.Discard, r.compReader)
+			io.Copy(io.Discard, r.compReader)
 
 			if err1 := readDataDescriptor(r.raw, r.f); err1 != nil {
 				if err1 == io.EOF {
@@ -299,7 +298,7 @@ func (f *File) skipToBody(r io.Reader) error {
 	filenameLen := int(b.uint16())
 	extraLen := int(b.uint16())
 	// Skip extra...
-	_, err := io.CopyN(ioutil.Discard, r, int64(filenameLen+extraLen))
+	_, err := io.CopyN(io.Discard, r, int64(filenameLen+extraLen))
 	return err
 }
 
@@ -558,6 +557,11 @@ func readDirectoryEnd(buf []byte, size int64) (dir *directoryEnd, err error) {
 			return nil, err
 		}
 	}
+	maxInt64 := uint64(1<<63 - 1)
+	if d.directorySize > maxInt64 || d.directoryOffset > maxInt64 {
+		return nil, ErrFormat
+	}
+
 	// Make sure directoryOffset points to somewhere in our file.
 	if o := int64(d.directoryOffset); o < 0 || o >= size {
 		return nil, ErrFormat
@@ -617,9 +621,13 @@ func findSignatureInBlock(b []byte) int {
 		if b[i] == 'P' && b[i+1] == 'K' && b[i+2] == 0x05 && b[i+3] == 0x06 {
 			// n is length of comment
 			n := int(b[i+directoryEndLen-2]) | int(b[i+directoryEndLen-1])<<8
-			if n+directoryEndLen+i <= len(b) {
-				return i
+			if n+directoryEndLen+i > len(b) {
+				// Truncated comment.
+				// Some parsers (such as Info-ZIP) ignore the truncated comment
+				// rather than treating it as a hard error.
+				return -1
 			}
+			return i
 		}
 	}
 	return -1

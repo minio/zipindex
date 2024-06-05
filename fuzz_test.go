@@ -28,7 +28,6 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"testing"
@@ -96,7 +95,7 @@ func FuzzRoundtrip(f *testing.F) {
 			defer rc.Close()
 
 			// Read the zip file content.
-			ioutil.ReadAll(rc)
+			io.ReadAll(rc)
 		}
 	})
 }

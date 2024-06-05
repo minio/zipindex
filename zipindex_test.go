@@ -60,6 +60,8 @@ func TestReadDir(t *testing.T) {
 		"zip64-2.zip",
 		"smallish.zip",
 		"zstd-compressed.zip",
+		"test-badbase.zip",
+		"comment-truncated.zip",
 		"fuzz/FuzzDeserializeFiles.zip",
 		"fuzz/FuzzRoundtrip.zip",
 	}
@@ -105,6 +107,7 @@ func TestReadDir(t *testing.T) {
 				sz = int(more.FromEnd)
 			}
 			files.OptimizeSize()
+			files.RemoveInsecurePaths()
 			ser, err := files.Serialize()
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)

@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/tinylib/msgp/msgp"
@@ -31,6 +33,7 @@ import (
 //go:generate msgp -file $GOFILE -unexported
 
 // File is a sparse representation of a File inside a zip file.
+//
 //msgp:tuple File
 type File struct {
 	Name               string // Name of the file as stored in the zip.
@@ -77,6 +80,7 @@ func (f *File) OpenRaw(r io.Reader) (io.Reader, error) {
 }
 
 // Files is a collection of files.
+//
 //msgp:ignore Files
 type Files []File
 
@@ -172,6 +176,24 @@ func (f Files) Serialize() ([]byte, error) {
 	res := make([]byte, 0, len(payload))
 	res = append(res, currentVerCompressedStructs)
 	return zstdEnc.EncodeAll(payload, res), nil
+}
+
+// RemoveInsecurePaths will remove any file with path deemed insecure.
+// This is files that fail either !filepath.IsLocal(file.Name) or contain a backslash.
+func (f *Files) RemoveInsecurePaths() {
+	files := *f
+	for i, file := range files {
+		if file.Name == "" {
+			// Zip permits an empty file name field.
+			continue
+		}
+		// The zip specification states that names must use forward slashes,
+		// so consider any backslashes in the name insecure.
+		if !filepath.IsLocal(file.Name) || strings.Contains(file.Name, `\`) {
+			files = append(files[:i], files[:i+1]...)
+		}
+	}
+	*f = files
 }
 
 // Sort files by offset in zip file.

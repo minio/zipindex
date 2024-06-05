@@ -25,7 +25,6 @@ package zipindex
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"sync"
 
 	"github.com/klauspost/compress/flate"
@@ -82,7 +81,7 @@ var (
 )
 
 func init() {
-	RegisterDecompressor(Store, ioutil.NopCloser)
+	RegisterDecompressor(Store, io.NopCloser)
 	RegisterDecompressor(Deflate, newFlateReader)
 	RegisterDecompressor(Zstd, zstd.ZipDecompressor(zstd.WithDecoderLowmem(true)))
 }

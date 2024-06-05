@@ -20,7 +20,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
-	"io/ioutil"
+	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -67,7 +68,7 @@ func TestReadDir(t *testing.T) {
 	}
 	for _, test := range testSet {
 		t.Run(test, func(t *testing.T) {
-			input, err := ioutil.ReadFile(filepath.Join("testdata", test))
+			input, err := os.ReadFile(filepath.Join("testdata", test))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -161,8 +162,8 @@ func TestReadDir(t *testing.T) {
 						t.Errorf("err mismatch: %v != %v", wantErr, gotErr)
 					}
 				}()
-				wantData, wantErr := ioutil.ReadAll(wantRC)
-				gotData, err := ioutil.ReadAll(rc)
+				wantData, wantErr := io.ReadAll(wantRC)
+				gotData, err := io.ReadAll(rc)
 				if err != nil {
 					if err == wantErr {
 						continue

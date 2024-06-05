@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 	"unicode/utf8"
@@ -206,7 +205,7 @@ func ReadFile(name string, filter FileFilter) (Files, error) {
 		if err != nil {
 			return nil, err
 		}
-		b, err := ioutil.ReadAll(f)
+		b, err := io.ReadAll(f)
 		if err != nil {
 			return nil, err
 		}
@@ -254,7 +253,7 @@ func (r *checksumReader) Read(b []byte) (n int, err error) {
 
 		if r.f.hasDataDescriptor() {
 			// If any compressed data remains, read it.
-			io.Copy(ioutil.Discard, r.compReader)
+			io.Copy(io.Discard, r.compReader)
 
 			if err1 := readDataDescriptor(r.raw, r.f); err1 != nil {
 				if err1 == io.EOF {
@@ -299,7 +298,7 @@ func (f *File) skipToBody(r io.Reader) error {
 	filenameLen := int(b.uint16())
 	extraLen := int(b.uint16())
 	// Skip extra...
-	_, err := io.CopyN(ioutil.Discard, r, int64(filenameLen+extraLen))
+	_, err := io.CopyN(io.Discard, r, int64(filenameLen+extraLen))
 	return err
 }
 

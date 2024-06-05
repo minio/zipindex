@@ -58,9 +58,6 @@ const (
 
 	// Version numbers.
 
-	// Limits for non zip64 files.
-	uint32max = (1 << 32) - 1
-
 	// Extra header IDs.
 	//
 	// IDs 0..31 are reserved for official use by PKWARE.
@@ -197,11 +194,6 @@ func (h *ZipDirEntry) Mode() (mode os.FileMode) {
 		mode |= os.ModeDir
 	}
 	return mode
-}
-
-// isZip64 reports whether the file size exceeds the 32 bit limit
-func (h *ZipDirEntry) isZip64() bool {
-	return h.CompressedSize64 >= uint32max || h.UncompressedSize64 >= uint32max
 }
 
 func msdosModeToFileMode(m uint32) (mode os.FileMode) {

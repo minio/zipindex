@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -29,7 +28,7 @@ import (
 )
 
 func ExampleReadDir() {
-	b, err := ioutil.ReadFile("testdata/big.zip")
+	b, err := os.ReadFile("testdata/big.zip")
 	if err != nil {
 		panic(err)
 	}
@@ -160,7 +159,7 @@ func ExampleDeserializeFiles() {
 		}
 	}
 
-	b, err := ioutil.ReadFile("testdata/big.zip")
+	b, err := os.ReadFile("testdata/big.zip")
 	exitOnErr(err)
 	// We only need the end of the file to parse the directory.
 	// Usually this should be at least 64K on initial try.
@@ -212,7 +211,7 @@ func ExampleDeserializeFiles() {
 	defer rc.Close()
 
 	// Read the zip file content.
-	content, err := ioutil.ReadAll(rc)
+	content, err := io.ReadAll(rc)
 	exitOnErr(err)
 
 	fmt.Printf("File content is '%s'\n", string(content))

@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/tinylib/msgp/msgp"
@@ -243,39 +244,49 @@ func (f Files) StripFlags(mask uint16) {
 	}
 }
 
+var decompBuffer sync.Pool
+
 // unpackPayload unpacks and optionally decompresses the payload.
-func unpackPayload(b []byte) ([]byte, bool, error) {
+func unpackPayload(b []byte) (payload []byte, structs, newBuf bool, err error) {
 	if len(b) < 1 {
-		return nil, false, io.ErrUnexpectedEOF
+		return nil, false, false, io.ErrUnexpectedEOF
 	}
 	if len(b) > MaxIndexSize {
-		return nil, false, ErrMaxSizeExceeded
+		return nil, false, false, ErrMaxSizeExceeded
 	}
 	var out []byte
 	switch b[0] {
 	case currentVerPlain:
 		out = b[1:]
 	case currentVerCompressed, currentVerCompressedStructs:
-		decoded, err := zstdDec.DecodeAll(b[1:], nil)
+		newBuf = true
+		dst, _ := decompBuffer.Get().([]byte)
+		// It is ok if we get a nil buffer, the decoder will allocate.
+
+		decoded, err := zstdDec.DecodeAll(b[1:], dst[:0])
 		if err != nil {
 			switch err {
 			case zstd.ErrDecoderSizeExceeded, zstd.ErrWindowSizeExceeded:
 				err = ErrMaxSizeExceeded
 			}
-			return nil, false, err
+			decompBuffer.Put(dst)
+			return nil, false, false, err
 		}
 		out = decoded
 	default:
-		return nil, false, errors.New("unknown version")
+		return nil, false, false, errors.New("unknown version")
 	}
-	return out, b[0] == currentVerCompressedStructs, nil
+	return out, b[0] == currentVerCompressedStructs, newBuf, nil
 }
 
 // DeserializeFiles will de-serialize the files.
 func DeserializeFiles(b []byte) (Files, error) {
-	b, structs, err := unpackPayload(b)
+	b, structs, newBuf, err := unpackPayload(b)
 	if err != nil {
 		return nil, err
+	}
+	if newBuf {
+		defer decompBuffer.Put(b)
 	}
 	if !structs {
 		var dst files
@@ -360,9 +371,12 @@ func readCustomData(bts []byte) (dst map[string]string, err error) {
 // Expected speed scales O(n) for n files.
 // Returns nil, io.EOF if not found.
 func FindSerialized(b []byte, name string) (*File, error) {
-	buf, structs, err := unpackPayload(b)
+	buf, structs, newBuf, err := unpackPayload(b)
 	if err != nil {
 		return nil, err
+	}
+	if newBuf {
+		defer decompBuffer.Put(buf)
 	}
 	if !structs {
 		n, buf, err := msgp.ReadArrayHeaderBytes(buf)

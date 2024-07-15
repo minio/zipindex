@@ -66,6 +66,8 @@ func (z *File) DecodeMsg(dc *msgp.Reader) (err error) {
 			delete(z.Custom, key)
 		}
 	}
+	var field []byte
+	_ = field
 	for zb0002 > 0 {
 		zb0002--
 		var za0001 string

@@ -1,7 +1,8 @@
 linters-settings:
-  golint:
-    min-confidence: 0
-
+  staticcheck:
+    checks:
+      - all
+      - '-SA6002' # disable the rule SA6002, slices are fine.
   misspell:
     locale: US
 
@@ -24,5 +25,3 @@ issues:
       - comment on exported method
       - should have comment or be unexported
       - error strings should not be capitalized or end with punctuation or a newline
-service:
-  golangci-lint-version: 1.59.0 # use the fixed version to not introduce new linters unexpectedly

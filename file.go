@@ -93,6 +93,7 @@ type files []File
 const currentVerPlain = 1
 const currentVerCompressed = 2
 const currentVerCompressedStructs = 3
+const currentVerCompressedStructsChunked = 4
 
 var zstdEnc, _ = zstd.NewWriter(nil, zstd.WithWindowSize(128<<10), zstd.WithEncoderConcurrency(2), zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
 var zstdDec, _ = zstd.NewReader(nil, zstd.WithDecoderLowmem(true), zstd.WithDecoderConcurrency(2), zstd.WithDecoderMaxMemory(MaxIndexSize), zstd.WithDecoderMaxWindow(8<<20))
@@ -133,7 +134,44 @@ func (f Files) Serialize() ([]byte, error) {
 		res = append(res, currentVerCompressed)
 		return zstdEnc.EncodeAll(payload, res), nil
 	}
+	const chunkN = 25000
+	if len(f) < chunkN {
+		return f.encodeAoS(nil)
+	}
+	f.SortByName()
+	res := append([]byte{}, currentVerCompressedStructsChunked)
+	left := f
+	var tmp []byte
+	for len(left) > 0 {
+		todo := left
+		if len(left) < chunkN*2 && len(left) > chunkN {
+			todo = left[:len(left)/2]
+		} else if len(left) > chunkN {
+			todo = left[:chunkN]
+		}
+		ch := chunk{
+			Files: len(todo),
+			First: todo[0].Name,
+			Last:  todo[len(todo)-1].Name,
+		}
+		// Sort each chunk for smaller offsets.
+		todo.Sort()
+		var err error
+		tmp, err = todo.encodeAoS(tmp[:0])
+		if err != nil {
+			return nil, err
+		}
+		ch.Payload = tmp
+		res, err = ch.MarshalMsg(res)
+		if err != nil {
+			return nil, err
+		}
+		left = left[len(todo):]
+	}
+	return res, nil
+}
 
+func (f Files) encodeAoS(res []byte) ([]byte, error) {
 	// Encode many files as struct of arrays...
 	x := filesAsStructs{
 		Names:   make([][]byte, len(f)),
@@ -174,7 +212,6 @@ func (f Files) Serialize() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := make([]byte, 0, len(payload))
 	res = append(res, currentVerCompressedStructs)
 	return zstdEnc.EncodeAll(payload, res), nil
 }
@@ -203,6 +240,20 @@ func (f *Files) RemoveInsecurePaths() {
 func (f Files) Sort() {
 	less := func(i, j int) bool {
 		a, b := f[i], f[j]
+		return a.Offset < b.Offset
+	}
+	if !sort.SliceIsSorted(f, less) {
+		sort.Slice(f, less)
+	}
+}
+
+// SortByName will sort files by file name in zip file.
+func (f Files) SortByName() {
+	less := func(i, j int) bool {
+		a, b := f[i], f[j]
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
 		return a.Offset < b.Offset
 	}
 	if !sort.SliceIsSorted(f, less) {
@@ -247,16 +298,17 @@ func (f Files) StripFlags(mask uint16) {
 var decompBuffer sync.Pool
 
 // unpackPayload unpacks and optionally decompresses the payload.
-func unpackPayload(b []byte) (payload []byte, structs, newBuf bool, err error) {
+func unpackPayload(b []byte) (payload []byte, typ byte, newBuf bool, err error) {
 	if len(b) < 1 {
-		return nil, false, false, io.ErrUnexpectedEOF
+		return nil, 0, false, io.ErrUnexpectedEOF
 	}
 	if len(b) > MaxIndexSize {
-		return nil, false, false, ErrMaxSizeExceeded
+		return nil, 0, false, ErrMaxSizeExceeded
 	}
 	var out []byte
-	switch b[0] {
-	case currentVerPlain:
+	typ = b[0]
+	switch typ {
+	case currentVerPlain, currentVerCompressedStructsChunked:
 		out = b[1:]
 	case currentVerCompressed, currentVerCompressedStructs:
 		newBuf = true
@@ -270,25 +322,25 @@ func unpackPayload(b []byte) (payload []byte, structs, newBuf bool, err error) {
 				err = ErrMaxSizeExceeded
 			}
 			decompBuffer.Put(dst)
-			return nil, false, false, err
+			return nil, typ, false, err
 		}
 		out = decoded
 	default:
-		return nil, false, false, errors.New("unknown version")
+		return nil, typ, false, errors.New("unknown version")
 	}
-	return out, b[0] == currentVerCompressedStructs, newBuf, nil
+	return out, typ, newBuf, nil
 }
 
 // DeserializeFiles will de-serialize the files.
 func DeserializeFiles(b []byte) (Files, error) {
-	b, structs, newBuf, err := unpackPayload(b)
+	b, typ, newBuf, err := unpackPayload(b)
 	if err != nil {
 		return nil, err
 	}
 	if newBuf {
 		defer decompBuffer.Put(b)
 	}
-	if !structs {
+	if typ == currentVerCompressed || typ == currentVerPlain {
 		var dst files
 		// Check number of files.
 		nFiles, _, err := msgp.ReadArrayHeaderBytes(b)
@@ -301,15 +353,53 @@ func DeserializeFiles(b []byte) (Files, error) {
 		_, err = dst.UnmarshalMsg(b)
 		return Files(dst), err
 	}
+	if typ == currentVerCompressedStructsChunked {
+		var dst Files
+		var c chunk
+		tmp, _ := decompBuffer.Get().([]byte)
+		defer func() {
+			if tmp != nil {
+				decompBuffer.Put(tmp)
+			}
+		}()
+		for len(b) > 0 {
+			b, err = c.UnmarshalMsgZC(b)
+			if err != nil {
+				return nil, err
+			}
+			if len(c.Payload) == 0 {
+				return nil, errors.New("missing payload")
+			}
+			switch c.Payload[0] {
+			case currentVerCompressedStructs:
+				tmp, err = zstdDec.DecodeAll(c.Payload[1:], tmp[:0])
+				if err != nil {
+					return nil, err
+				}
+				dst, err = deserializeAoS(tmp, dst)
+				if err != nil {
+					return nil, err
+				}
+			default:
+				return nil, errors.New("unknown version")
+			}
+		}
+		return dst, nil
+	}
+	return deserializeAoS(b, nil)
+}
 
+func deserializeAoS(b []byte, files Files) (Files, error) {
 	var dst filesAsStructs
+	var err error
 	if _, err = dst.UnmarshalMsg(b); err != nil {
 		return nil, err
 	}
-
-	files := make(Files, len(dst.Names))
+	start := len(files)
+	files = append(files, make(Files, len(dst.Names))...)
+	add := files[start:]
 	var cur File
-	for i := range files {
+	for i := range add {
 		cur = File{
 			Name:             string(dst.Names[i]),
 			CompressedSize64: uint64(dst.CSizes[i] + int64(cur.CompressedSize64)),
@@ -321,17 +411,18 @@ func DeserializeFiles(b []byte) (Files, error) {
 		if i == 0 {
 			cur.Offset = dst.Offsets[i]
 		} else {
-			cur.Offset = dst.Offsets[i] + files[i-1].Offset + int64(files[i-1].CompressedSize64) + fileHeaderLen + int64(len(files[i-1].Name)) + dataDescriptorLen
+			cur.Offset = dst.Offsets[i] + add[i-1].Offset + int64(add[i-1].CompressedSize64) + fileHeaderLen + int64(len(add[i-1].Name)) + dataDescriptorLen
 		}
 		if len(dst.Custom[i]) > 0 {
 			if cur.Custom, err = readCustomData(dst.Custom[i]); err != nil {
 				return nil, err
 			}
 		}
-		files[i] = cur
+		add[i] = cur
 
 	}
 	return files, err
+
 }
 
 func readCustomData(bts []byte) (dst map[string]string, err error) {
@@ -371,14 +462,14 @@ func readCustomData(bts []byte) (dst map[string]string, err error) {
 // Expected speed scales O(n) for n files.
 // Returns nil, io.EOF if not found.
 func FindSerialized(b []byte, name string) (*File, error) {
-	buf, structs, newBuf, err := unpackPayload(b)
+	buf, typ, newBuf, err := unpackPayload(b)
 	if err != nil {
 		return nil, err
 	}
 	if newBuf {
 		defer decompBuffer.Put(buf)
 	}
-	if !structs {
+	if typ == currentVerCompressed || typ == currentVerPlain {
 		n, buf, err := msgp.ReadArrayHeaderBytes(buf)
 		if err != nil {
 			return nil, err
@@ -397,6 +488,38 @@ func FindSerialized(b []byte, name string) (*File, error) {
 			}
 		}
 		return nil, io.EOF
+	}
+
+	if typ == currentVerCompressedStructsChunked {
+		var c chunk
+		for len(buf) > 0 {
+			buf, err = c.UnmarshalMsgZC(buf)
+			if err != nil {
+				return nil, err
+			}
+			if name < c.First {
+				return nil, io.EOF
+			}
+			if name >= c.First && name <= c.Last {
+				if len(c.Payload) == 0 {
+					return nil, errors.New("missing payload")
+				}
+				buf = c.Payload
+				if buf[0] != currentVerCompressedStructs {
+					return nil, errors.New("unknown chunk")
+				}
+				dst, _ := decompBuffer.Get().([]byte)
+				defer decompBuffer.Put(dst)
+				buf, err = zstdDec.DecodeAll(buf[1:], dst[:0])
+				if err != nil {
+					return nil, err
+				}
+				break
+			}
+			if len(buf) == 0 {
+				return nil, io.EOF
+			}
+		}
 	}
 
 	// Files are packed as an array of arrays...
@@ -821,6 +944,67 @@ func (z *filesAsStructs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err, "Custom", za0007)
 			return
+		}
+	}
+	o = bts
+	return
+}
+
+type chunk struct {
+	Files   int
+	First   string
+	Last    string
+	Payload []byte
+}
+
+// UnmarshalMsgZC unmarshals, but does a zero copy bytes
+func (z *chunk) UnmarshalMsgZC(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Files":
+			z.Files, bts, err = msgp.ReadIntBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Files")
+				return
+			}
+		case "First":
+			z.First, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "First")
+				return
+			}
+		case "Last":
+			z.Last, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Last")
+				return
+			}
+		case "Payload":
+			z.Payload, bts, err = msgp.ReadBytesZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Payload")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
 		}
 	}
 	o = bts

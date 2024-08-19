@@ -25,7 +25,7 @@ package zipindex
 import "errors"
 
 // MaxFiles is the maximum number of files inside a zip file.
-const MaxFiles = 100_000_000
+const MaxFiles = 1_000_000_000
 
 // ErrTooManyFiles is returned when a zip file contains too many files.
 var ErrTooManyFiles = errors.New("too many files")

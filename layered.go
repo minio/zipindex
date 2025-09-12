@@ -345,7 +345,7 @@ type RefSerializer[T comparable] struct {
 // Uses concurrent serialization for better performance with large indexes.
 func (l *LayeredIndex[T]) SerializeLayered(refSerializer RefSerializer[T]) ([]byte, error) {
 	if refSerializer.Marshal == nil {
-		return nil, fmt.Errorf("Marshal function is required")
+		return nil, fmt.Errorf("marshal function is required")
 	}
 
 	// Write header manually using msgp
@@ -429,7 +429,7 @@ func (l *LayeredIndex[T]) SerializeLayered(refSerializer RefSerializer[T]) ([]by
 // Uses concurrent deserialization for better performance with large indexes.
 func DeserializeLayered[T comparable](data []byte, refSerializer RefSerializer[T]) (*LayeredIndex[T], error) {
 	if refSerializer.Unmarshal == nil {
-		return nil, fmt.Errorf("Unmarshal function is required")
+		return nil, fmt.Errorf("unmarshal function is required")
 	}
 
 	// Read header manually using msgp

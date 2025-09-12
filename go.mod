@@ -3,8 +3,8 @@ module github.com/minio/zipindex
 go 1.23
 
 require (
-	github.com/klauspost/compress v1.17.9
-	github.com/tinylib/msgp v1.2.0
+	github.com/klauspost/compress v1.18.0
+	github.com/tinylib/msgp v1.4.0
 )
 
-require github.com/philhofer/fwd v1.1.3-0.20240612014219-fbbf4953d986 // indirect
+require github.com/philhofer/fwd v1.2.0 // indirect

@@ -1055,6 +1055,200 @@ func TestLayeredIndex_FindFilesConsistency(t *testing.T) {
 	}
 }
 
+// Test CompactDeletes
+func TestLayeredIndex_CompactDeletes(t *testing.T) {
+	t.Run("NoDeletes", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{{Name: "a.txt"}}, "v1")
+		l.AddLayer(Files{{Name: "b.txt"}}, "v2")
+
+		err := l.CompactDeletes("compact")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if l.LayerCount() != 2 {
+			t.Errorf("Expected 2 layers (no-op), got %d", l.LayerCount())
+		}
+	})
+
+	t.Run("SingleDelete", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{
+			{Name: "a.txt", CRC32: 1},
+			{Name: "b.txt", CRC32: 2},
+			{Name: "c.txt", CRC32: 3},
+		}, "base")
+		l.AddDeleteLayer(Files{{Name: "b.txt"}}, "del1")
+
+		filesBefore := l.Files()
+		err := l.CompactDeletes("compact")
+		if err != nil {
+			t.Fatal(err)
+		}
+		filesAfter := l.Files()
+
+		if len(filesBefore) != len(filesAfter) {
+			t.Fatalf("File count changed: %d -> %d", len(filesBefore), len(filesAfter))
+		}
+		for i := range filesBefore {
+			if filesBefore[i].Name != filesAfter[i].Name {
+				t.Errorf("File %d name mismatch: %s vs %s", i, filesBefore[i].Name, filesAfter[i].Name)
+			}
+		}
+	})
+
+	t.Run("MultipleDeletes", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{
+			{Name: "a.txt"},
+			{Name: "b.txt"},
+			{Name: "c.txt"},
+			{Name: "d.txt"},
+		}, "base")
+		l.AddDeleteLayer(Files{{Name: "a.txt"}}, "del1")
+		l.AddDeleteLayer(Files{{Name: "c.txt"}}, "del2")
+
+		filesBefore := l.Files()
+		err := l.CompactDeletes("compact")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Should have 1 add + 1 delete layer
+		if l.LayerCount() != 2 {
+			t.Errorf("Expected 2 layers, got %d", l.LayerCount())
+		}
+		filesAfter := l.Files()
+		if len(filesBefore) != len(filesAfter) {
+			t.Fatalf("File count changed: %d -> %d", len(filesBefore), len(filesAfter))
+		}
+		for i := range filesBefore {
+			if filesBefore[i].Name != filesAfter[i].Name {
+				t.Errorf("File %d name mismatch: %s vs %s", i, filesBefore[i].Name, filesAfter[i].Name)
+			}
+		}
+	})
+
+	t.Run("InterleavedAddDelete", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{{Name: "a.txt", CRC32: 1}}, "v1")
+		l.AddDeleteLayer(Files{{Name: "a.txt"}}, "del1")
+		l.AddLayer(Files{{Name: "a.txt", CRC32: 2}}, "v2")
+
+		filesBefore := l.Files()
+		err := l.CompactDeletes("compact")
+		if err != nil {
+			t.Fatal(err)
+		}
+		filesAfter := l.Files()
+
+		// a.txt was re-added, so no effective deletes
+		if len(filesAfter) != 1 || filesAfter[0].Name != "a.txt" {
+			t.Errorf("Expected [a.txt], got %v", filesAfter)
+		}
+		if filesAfter[0].CRC32 != filesBefore[0].CRC32 {
+			t.Errorf("CRC changed: %d -> %d", filesBefore[0].CRC32, filesAfter[0].CRC32)
+		}
+	})
+
+	t.Run("DirectoryCleanup", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{
+			{Name: "dir/"},
+			{Name: "dir/file1.txt"},
+			{Name: "other.txt"},
+		}, "base")
+		l.AddDeleteLayer(Files{{Name: "dir/file1.txt"}}, "del1")
+
+		filesBefore := l.Files()
+		err := l.CompactDeletes("compact")
+		if err != nil {
+			t.Fatal(err)
+		}
+		filesAfter := l.Files()
+
+		if len(filesBefore) != len(filesAfter) {
+			t.Fatalf("File count changed: %d -> %d", len(filesBefore), len(filesAfter))
+		}
+		if l.HasFile("dir/") {
+			t.Error("dir/ should still be auto-cleaned after compaction")
+		}
+	})
+
+	t.Run("RefConflict", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{{Name: "a.txt"}}, "base")
+		l.AddDeleteLayer(Files{{Name: "a.txt"}}, "del1")
+
+		err := l.CompactDeletes("base")
+		if err == nil {
+			t.Error("Should error when ref conflicts with existing add layer")
+		}
+	})
+
+	t.Run("ReuseDeleteRef", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{{Name: "a.txt"}}, "base")
+		l.AddDeleteLayer(Files{{Name: "a.txt"}}, "del1")
+
+		// Using a ref that matches a delete layer being removed should work.
+		err := l.CompactDeletes("del1")
+		if err != nil {
+			t.Errorf("Should allow reusing a delete layer ref: %v", err)
+		}
+	})
+
+	t.Run("AllDeleted", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{{Name: "a.txt"}, {Name: "b.txt"}}, "base")
+		l.AddDeleteLayer(Files{{Name: "a.txt"}, {Name: "b.txt"}}, "del1")
+
+		err := l.CompactDeletes("compact")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if l.FileCount() != 0 {
+			t.Errorf("Expected 0 files, got %d", l.FileCount())
+		}
+	})
+
+	t.Run("RefConflictNoEffectiveDeletes", func(t *testing.T) {
+		// Delete then re-add: no effective deletes, but ref is still checked.
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{{Name: "a.txt", CRC32: 1}}, "base")
+		l.AddDeleteLayer(Files{{Name: "a.txt"}}, "del1")
+		l.AddLayer(Files{{Name: "a.txt", CRC32: 2}}, "v2")
+
+		err := l.CompactDeletes("base")
+		if err == nil {
+			t.Error("Should error on conflicting ref even when no effective deletes")
+		}
+	})
+
+	t.Run("ComplexCycles", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{{Name: "a.txt", CRC32: 1}}, "v1")
+		l.AddDeleteLayer(Files{{Name: "a.txt"}}, "del1")
+		l.AddLayer(Files{{Name: "a.txt", CRC32: 2}}, "v2")
+		l.AddDeleteLayer(Files{{Name: "a.txt"}}, "del2")
+		l.AddLayer(Files{{Name: "a.txt", CRC32: 3}}, "v3")
+
+		filesBefore := l.Files()
+		err := l.CompactDeletes("compact")
+		if err != nil {
+			t.Fatal(err)
+		}
+		filesAfter := l.Files()
+
+		if len(filesBefore) != len(filesAfter) {
+			t.Fatalf("File count changed: %d -> %d", len(filesBefore), len(filesAfter))
+		}
+		if filesAfter[0].CRC32 != 3 {
+			t.Errorf("Expected CRC 3, got %d", filesAfter[0].CRC32)
+		}
+	})
+}
+
 // Test serialization with string references
 func TestLayeredIndex_SerializationString(t *testing.T) {
 	// Create serializer for string references

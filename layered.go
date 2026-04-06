@@ -333,6 +333,73 @@ func (l *LayeredIndex[T]) HasFile(name string) bool {
 	return found
 }
 
+// CompactDeletes merges all delete layers into at most one delete layer on top.
+// The ref is used for the compacted delete layer.
+// Returns an error if ref conflicts with an existing non-delete layer.
+// No-op if there are no delete layers.
+func (l *LayeredIndex[T]) CompactDeletes(ref T) error {
+	hasDeletes := false
+	for _, lay := range l.layers {
+		if lay.isDelete {
+			hasDeletes = true
+			break
+		}
+	}
+	if !hasDeletes {
+		return nil
+	}
+
+	// Check ref doesn't conflict with non-delete layers.
+	for _, lay := range l.layers {
+		if !lay.isDelete && lay.ref == ref {
+			return fmt.Errorf("layer with reference %v already exists", ref)
+		}
+	}
+
+	// Compute visible files with all layers applied.
+	visible := make(map[string]struct{})
+	for _, f := range l.Files() {
+		visible[f.Name] = struct{}{}
+	}
+
+	// Collect all names contributed by add layers.
+	addFiles := make(map[string]struct{})
+	for _, lay := range l.layers {
+		if !lay.isDelete {
+			for _, f := range lay.index {
+				addFiles[f.Name] = struct{}{}
+			}
+		}
+	}
+
+	// Effective deletes = added but no longer visible.
+	var deletes Files
+	for name := range addFiles {
+		if _, ok := visible[name]; !ok {
+			deletes = append(deletes, File{Name: name})
+		}
+	}
+
+	// Remove all delete layers.
+	newLayers := make([]layer[T], 0, len(l.layers))
+	for _, lay := range l.layers {
+		if !lay.isDelete {
+			newLayers = append(newLayers, lay)
+		}
+	}
+	l.layers = newLayers
+
+	if len(deletes) > 0 {
+		deletes.SortByName()
+		l.layers = append(l.layers, layer[T]{
+			index:    deletes,
+			ref:      ref,
+			isDelete: true,
+		})
+	}
+	return nil
+}
+
 // RefSerializer provides functions to convert layer references to/from byte slices.
 type RefSerializer[T comparable] struct {
 	// Marshal converts a reference to bytes

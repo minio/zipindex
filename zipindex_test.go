@@ -183,6 +183,32 @@ func TestReadDir(t *testing.T) {
 	}
 }
 
+// TestUnderSize checks that reading stops as soon as an entry decompresses
+// to more than its UncompressedSize64.
+func TestUnderSize(t *testing.T) {
+	input, err := os.ReadFile(filepath.Join("testdata", "readme.zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := ReadDir(input, int64(len(input)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		t.Run(f.Name, func(t *testing.T) {
+			f.UncompressedSize64 = 1
+			rc, err := f.Open(bytes.NewReader(input[f.Offset:]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rc.Close()
+			if _, err := io.Copy(io.Discard, rc); err != ErrFormat {
+				t.Fatalf("got error %v, want %v", err, ErrFormat)
+			}
+		})
+	}
+}
+
 // TestReadDirInfoZIPMaxUint32Fields checks archives written by Info-ZIP 3.0
 // where a 32-bit size or header offset is exactly 0xFFFFFFFF. Info-ZIP stores
 // such values directly, without a Zip64 extra field.

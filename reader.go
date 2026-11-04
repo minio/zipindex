@@ -400,10 +400,6 @@ func readDirectoryHeader(f *ZipDirEntry, r io.Reader) error {
 		f.NonUTF8 = f.Flags&0x800 == 0
 	}
 
-	needUSize := f.uncompressedSize == ^uint32(0)
-	needCSize := f.compressedSize == ^uint32(0)
-	needHeaderOffset := f.headerOffset == int64(^uint32(0))
-
 	// Best effort to find what we need.
 	// Other zip authors might not even follow the basic format,
 	// and we'll just ignore the Extra content in that case.
@@ -422,23 +418,20 @@ parseExtras:
 			// update directory values from the zip64 extra block.
 			// They should only be consulted if the sizes read earlier
 			// are maxed out.
-			// See golang.org/issue/13367.
-			if needUSize {
-				needUSize = false
+			// See go.dev/issue/13367 and go.dev/issue/31692.
+			if f.uncompressedSize == ^uint32(0) {
 				if len(fieldBuf) < 8 {
 					return ErrFormat
 				}
 				f.UncompressedSize64 = fieldBuf.uint64()
 			}
-			if needCSize {
-				needCSize = false
+			if f.compressedSize == ^uint32(0) {
 				if len(fieldBuf) < 8 {
 					return ErrFormat
 				}
 				f.CompressedSize64 = fieldBuf.uint64()
 			}
-			if needHeaderOffset {
-				needHeaderOffset = false
+			if f.headerOffset == int64(^uint32(0)) {
 				if len(fieldBuf) < 8 {
 					return ErrFormat
 				}
@@ -501,20 +494,6 @@ parseExtras:
 		}
 	}
 
-	// Assume that uncompressed size 2³²-1 could plausibly happen in
-	// an old zip32 file that was sharding inputs into the largest chunks
-	// possible (or is just malicious; search the web for 42.zip).
-	// If needUSize is true still, it means we didn't see a zip64 extension.
-	// As long as the compressed size is not also 2³²-1 (implausible)
-	// and the header is not also 2³²-1 (equally implausible),
-	// accept the uncompressed size 2³²-1 as valid.
-	// If nothing else, this keeps archive/zip working with 42.zip.
-	_ = needUSize
-
-	if needCSize || needHeaderOffset {
-		return ErrFormat
-	}
-
 	return nil
 }
 
@@ -544,7 +523,7 @@ func readDirectoryEnd(buf []byte, size int64) (dir *directoryEnd, err error) {
 	d.comment = string(b[:l])
 
 	// These values mean that the file can be a zip64 file
-	if d.directoryRecords == 0xffff || d.directorySize == 0xffff || d.directoryOffset == 0xffffffff {
+	if d.directoryRecords == 0xffff || d.directorySize == 0xffffffff || d.directoryOffset == 0xffffffff {
 		p, err := findDirectory64End(buf, offset)
 		fromEnd := size - p
 		if err == nil && p >= 0 {

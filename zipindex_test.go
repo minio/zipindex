@@ -19,6 +19,7 @@ package zipindex
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -177,6 +178,94 @@ func TestReadDir(t *testing.T) {
 			}
 			if nFiles > 0 {
 				t.Logf("%.02f bytes/file", float64(len(ser))/float64(nFiles))
+			}
+		})
+	}
+}
+
+// TestReadDirInfoZIPMaxUint32Fields checks archives written by Info-ZIP 3.0
+// where a 32-bit size or header offset is exactly 0xFFFFFFFF. Info-ZIP stores
+// such values directly, without a Zip64 extra field.
+// The tails are from the standard library's testdata/zip64 goldens.
+func TestReadDirInfoZIPMaxUint32Fields(t *testing.T) {
+	type wantFile struct {
+		name   string
+		size   uint64
+		offset int64
+	}
+	tests := []struct {
+		name  string
+		size  int64  // archive size
+		tail  string // hex of the archive's last bytes
+		files []wantFile
+	}{
+		{
+			// Stored entry of 4GiB-1 bytes: both sizes are 0xFFFFFFFF.
+			// The tail starts at the central directory.
+			name: "infozip-store-4g-minus-1",
+			size: 4294967491,
+			tail: "504b01021e030a00000000005d63b25c00000000ffffffffffffffff0b000000" +
+				"0000000000000000a4810000000062696734672d312e62696e504b06062c0000" +
+				"00000000001e032d000000000000000000010000000000000001000000000000" +
+				"0039000000000000002800000001000000504b06070000000061000000010000" +
+				"0001000000504b0506000000000100010039000000ffffffff0000",
+			files: []wantFile{{name: "big4g-1.bin", size: 1<<32 - 1}},
+		},
+		{
+			// The second local file header starts at offset 0xFFFFFFFF,
+			// which is where the tail starts.
+			name: "infozip-offset-eq-4g",
+			size: 4294967580,
+			tail: "504b03040a00000000005d63b25cfb286fe42a0000002a00000009000000736d" +
+				"616c6c2e62696e00000000000000000000000000000000000000000000000000" +
+				"0000000000000000000000000000000000504b01021e030a00000000005d63b2" +
+				"5c63944eaddcffffffdcffffff050000000000000000000000a4810000000066" +
+				"69727374504b01021e030a00000000005d63b25cfb286fe42a0000002a000000" +
+				"090000000000000000000000a481ffffffff736d616c6c2e62696e504b06062c" +
+				"000000000000001e032d00000000000000000002000000000000000200000000" +
+				"0000006a000000000000005000000001000000504b060700000000ba00000001" +
+				"00000001000000504b050600000000020002006a000000ffffffff0000",
+			files: []wantFile{
+				{name: "first", size: 1<<32 - 36},
+				{name: "small.bin", size: 42, offset: 1<<32 - 1},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tail, err := hex.DecodeString(test.tail)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files, err := ReadDir(tail, test.size, nil)
+			if err != nil {
+				t.Fatalf("ReadDir: %v", err)
+			}
+			if len(files) != len(test.files) {
+				t.Fatalf("got %d files, want %d", len(files), len(test.files))
+			}
+			for i, want := range test.files {
+				f := files[i]
+				if f.Name != want.name || f.CompressedSize64 != want.size || f.UncompressedSize64 != want.size || f.Offset != want.offset {
+					t.Errorf("file %d: got %q sizes %d/%d offset %d, want %q size %d offset %d",
+						i, f.Name, f.CompressedSize64, f.UncompressedSize64, f.Offset, want.name, want.size, want.offset)
+				}
+			}
+
+			// Read the last entry if its local header is in the tail.
+			f := files[len(files)-1]
+			if start := test.size - int64(len(tail)); f.Offset >= start {
+				rc, err := f.Open(bytes.NewReader(tail[f.Offset-start:]))
+				if err != nil {
+					t.Fatalf("%s: Open: %v", f.Name, err)
+				}
+				got, err := io.ReadAll(rc)
+				if err != nil {
+					t.Fatalf("%s: read: %v", f.Name, err)
+				}
+				if !bytes.Equal(got, make([]byte, f.UncompressedSize64)) {
+					t.Errorf("%s: content = %x, want %d zero bytes", f.Name, got, f.UncompressedSize64)
+				}
 			}
 		})
 	}

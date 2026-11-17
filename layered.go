@@ -333,19 +333,19 @@ func (l *LayeredIndex[T]) HasFile(name string) bool {
 	return found
 }
 
-// CompactDeletes merges all delete layers into at most one delete layer on top.
+// CompactDeletes merges all delete layers into at most one delete layer,
+// placed where the last delete layer was. Add layers after it stay on top.
 // The ref is used for the compacted delete layer.
 // Returns an error if ref conflicts with an existing non-delete layer.
 // No-op if there are no delete layers.
 func (l *LayeredIndex[T]) CompactDeletes(ref T) error {
-	hasDeletes := false
-	for _, lay := range l.layers {
+	last := -1
+	for i, lay := range l.layers {
 		if lay.isDelete {
-			hasDeletes = true
-			break
+			last = i
 		}
 	}
-	if !hasDeletes {
+	if last < 0 {
 		return nil
 	}
 
@@ -356,15 +356,18 @@ func (l *LayeredIndex[T]) CompactDeletes(ref T) error {
 		}
 	}
 
-	// Compute visible files with all layers applied.
+	// Only compact up to the last delete layer. Its state has no empty directories,
+	// so the compacted layer's cleanup is a no-op there, and it cannot remove
+	// directories re-added by later add layers.
+	prefix := LayeredIndex[T]{layers: l.layers[:last+1]}
 	visible := make(map[string]struct{})
-	for _, f := range l.Files() {
+	for _, f := range prefix.Files() {
 		visible[f.Name] = struct{}{}
 	}
 
 	// Collect all names contributed by add layers.
 	addFiles := make(map[string]struct{})
-	for _, lay := range l.layers {
+	for _, lay := range prefix.layers {
 		if !lay.isDelete {
 			for _, f := range lay.index {
 				addFiles[f.Name] = struct{}{}
@@ -382,21 +385,21 @@ func (l *LayeredIndex[T]) CompactDeletes(ref T) error {
 
 	// Remove all delete layers.
 	newLayers := make([]layer[T], 0, len(l.layers))
-	for _, lay := range l.layers {
+	for _, lay := range prefix.layers {
 		if !lay.isDelete {
 			newLayers = append(newLayers, lay)
 		}
 	}
-	l.layers = newLayers
 
 	if len(deletes) > 0 {
 		deletes.SortByName()
-		l.layers = append(l.layers, layer[T]{
+		newLayers = append(newLayers, layer[T]{
 			index:    deletes,
 			ref:      ref,
 			isDelete: true,
 		})
 	}
+	l.layers = append(newLayers, l.layers[last+1:]...)
 	return nil
 }
 

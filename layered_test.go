@@ -1247,6 +1247,25 @@ func TestLayeredIndex_CompactDeletes(t *testing.T) {
 			t.Errorf("Expected CRC 3, got %d", filesAfter[0].CRC32)
 		}
 	})
+
+	t.Run("ReAddedDirectory", func(t *testing.T) {
+		l := NewLayeredIndex[string]()
+		l.AddLayer(Files{{Name: "dir/"}, {Name: "dir/a.txt"}}, "base")
+		l.AddDeleteLayer(Files{{Name: "dir/a.txt"}}, "del1")
+		l.AddLayer(Files{{Name: "dir/"}}, "readd")
+
+		filesBefore := l.Files()
+		hasBefore := l.HasFile("dir/")
+		if err := l.CompactDeletes("compact"); err != nil {
+			t.Fatal(err)
+		}
+		if got := l.Files(); !reflect.DeepEqual(filesBefore, got) {
+			t.Errorf("Files changed: %v -> %v", filesBefore, got)
+		}
+		if got := l.HasFile("dir/"); got != hasBefore {
+			t.Errorf("HasFile(dir/) changed: %v -> %v", hasBefore, got)
+		}
+	})
 }
 
 // Test serialization with string references

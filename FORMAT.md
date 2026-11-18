@@ -11,13 +11,13 @@ The format consists of a single byte indicating the following data.
 
 If version is 2, payload is compressed. 
 The rest of the payload must be decompressed using Zstandard. 
-A maximum window size of 8MB is allowed.
+A maximum window size of 8MiB is allowed.
 
 Type 1+2 contain an array of entries, each with 8 attributes. `[entries][8]attributes`.
 
 Arrays are encoded as regular messagepack arrays.
 
-No more than 100 entries are allowed as type 1+2. The uncompressed serialized data *must* be less than 128MB.
+No more than 100 entries are allowed as type 1+2. The uncompressed serialized data *must* be less than 128MiB.
 
 Entries are stored as messagepack types. The values must fit within the bits specified.
 
@@ -41,11 +41,11 @@ since this indicates that the CRC is available as part of the in-stream data des
 ## Type 3
 
 This type is always compressed.
-The rest of the payload must be decompressed using Zstandard. A maximum window size of 8MB is allowed.
+The rest of the payload must be decompressed using Zstandard. A maximum window size of 8MiB is allowed.
 
 Files are stored as an array of arrays. The arrays size of `Names` indicates the number of entries.
 
-The uncompressed serialized data *must* be less than 128MB. A separate file-count cap of 1 billion entries exists, but the 128MB size limit will be the binding constraint in practice.
+The uncompressed serialized data *must* be less than 128MiB. A separate file-count cap of 1 billion entries exists, but the 128MiB size limit will be the binding constraint in practice.
 
 All arrays must have the same number of entries. CRCs must have `entries*4` bytes.
 
@@ -154,8 +154,8 @@ Zstandard-compressed `filesAsStructs` data. Chunks can be decompressed independe
 The recommended chunk size is approximately 25,000 entries. If the remaining entries would
 produce a chunk between 25,000 and 50,000, it should be split in half.
 
-Each chunk is subject to the same 128MB uncompressed limit as Type 3.
-The complete Type 4 payload, including the version byte and all chunks, must not exceed 128MB.
+Each chunk is subject to the same 128MiB uncompressed limit as Type 3.
+The complete Type 4 payload, including the version byte and all chunks, must not exceed 128MiB.
 The 1 billion file-count cap applies across all chunks, but the total size limit will be the binding constraint in practice.
 
 ## Layered Index
@@ -164,6 +164,8 @@ A layered index wraps multiple file indexes with override/delete semantics.
 All values are encoded as messagepack types.
 
 ### Header
+
+The header is two consecutive messagepack values, `Version` then `NumLayers`, with no enclosing array or map.
 
 | Name       | Type   | Description              |
 |------------|--------|--------------------------|

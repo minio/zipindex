@@ -154,8 +154,9 @@ Zstandard-compressed `filesAsStructs` data. Chunks can be decompressed independe
 The recommended chunk size is approximately 25,000 entries. If the remaining entries would
 produce a chunk between 25,000 and 50,000, it should be split in half.
 
-Each chunk is subject to the same 128MB uncompressed limit as Type 3. 
-The 1 billion file-count cap applies across all chunks.
+Each chunk is subject to the same 128MB uncompressed limit as Type 3.
+The complete Type 4 payload, including the version byte and all chunks, must not exceed 128MB.
+The 1 billion file-count cap applies across all chunks, but the total size limit will be the binding constraint in practice.
 
 ## Layered Index
 
@@ -182,7 +183,11 @@ Each layer consists of three consecutive messagepack values:
 
 Newer layers override older layers for files with the same name.
 A delete layer removes matching files from all earlier layers.
-Files within each layer are sorted by name.
+After each delete layer, every directory entry (name ending in `/`) with no remaining entries below it is removed.
+This includes empty directories added by earlier layers, not only parents of deleted files.
+
+Readers must not assume files within a layer are sorted by name.
+Type 4 payloads are only ordered by name between chunks.
 
 # Future extensions
 

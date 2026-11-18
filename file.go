@@ -23,6 +23,7 @@ import (
 	"hash/crc32"
 	"io"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -138,6 +139,8 @@ func (f Files) Serialize() ([]byte, error) {
 	if len(f) < chunkN {
 		return f.encodeAoS(nil)
 	}
+	// Chunking sorts in place; don't reorder the caller's slice.
+	f = slices.Clone(f)
 	f.SortByName()
 	res := append([]byte{}, currentVerCompressedStructsChunked)
 	left := f

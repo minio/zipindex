@@ -1693,3 +1693,23 @@ func BenchmarkLayeredIndex_Deserialization(b *testing.B) {
 		_ = l2
 	}
 }
+
+func TestLayeredIndex_FindAfterSerializeChunked(t *testing.T) {
+	const n = 60000
+	f := make(Files, n)
+	for i := range f {
+		f[i] = File{Name: fmt.Sprintf("f%06d", i), Offset: int64(n-i) * 100, CompressedSize64: 10}
+	}
+	l := NewLayeredIndex[int]()
+	if err := l.AddLayer(f, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.SerializeLayered(RefSerializer[int]{Marshal: func(int) ([]byte, error) { return nil, nil }}); err != nil {
+		t.Fatal(err)
+	}
+	for i := range n {
+		if name := fmt.Sprintf("f%06d", i); !l.HasFile(name) {
+			t.Fatalf("%s not found after SerializeLayered", name)
+		}
+	}
+}

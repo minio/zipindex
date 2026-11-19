@@ -42,3 +42,9 @@ const MaxIndexSize = 128 << 20
 
 // ErrMaxSizeExceeded is returned if the maximum size of data is exceeded.
 var ErrMaxSizeExceeded = errors.New("index maximum size exceeded")
+
+// MaxLayers is the maximum number of layers in a LayeredIndex.
+const MaxLayers = 100_000
+
+// ErrTooManyLayers is returned when a layered index has too many layers.
+var ErrTooManyLayers = errors.New("too many layers")

@@ -19,10 +19,13 @@ package zipindex
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"sort"
 	"testing"
+
+	"github.com/tinylib/msgp/msgp"
 )
 
 // Test basic creation and layer management
@@ -1710,6 +1713,43 @@ func TestLayeredIndex_FindAfterSerializeChunked(t *testing.T) {
 	for i := range n {
 		if name := fmt.Sprintf("f%06d", i); !l.HasFile(name) {
 			t.Fatalf("%s not found after SerializeLayered", name)
+		}
+	}
+}
+
+func TestLayeredIndex_MaxLayers(t *testing.T) {
+	l := NewLayeredIndex[int]()
+	l.layers = make([]layer[int], MaxLayers)
+	if err := l.AddLayer(nil, -1); err != ErrTooManyLayers {
+		t.Errorf("AddLayer: got error %v, want %v", err, ErrTooManyLayers)
+	}
+	if err := l.AddDeleteLayer(nil, -1); err != ErrTooManyLayers {
+		t.Errorf("AddDeleteLayer: got error %v, want %v", err, ErrTooManyLayers)
+	}
+
+	// Must fail before allocating for the claimed layer count.
+	data := msgp.AppendUint32(msgp.AppendUint8(nil, 1), math.MaxUint32)
+	unmarshal := RefSerializer[int]{Unmarshal: func([]byte) (int, error) { return 0, nil }}
+	if _, err := DeserializeLayered(data, unmarshal); err != ErrTooManyLayers {
+		t.Errorf("DeserializeLayered: got error %v, want %v", err, ErrTooManyLayers)
+	}
+}
+
+func TestLayeredIndex_DuplicateNames(t *testing.T) {
+	l := NewLayeredIndex[int]()
+	if err := l.AddLayer(Files{{Name: "a", Offset: 30}, {Name: "b"}, {Name: "a", Offset: 10}, {Name: "a", Offset: 20}}, 1); err != nil {
+		t.Fatal(err)
+	}
+	const want = 30
+	if f, ok := l.Find("a"); !ok || f.Offset != want {
+		t.Errorf("Find: got %+v, want offset %d", f, want)
+	}
+	if f, ok := l.FindInLayer("a", 1); !ok || f.Offset != want {
+		t.Errorf("FindInLayer: got %+v, want offset %d", f, want)
+	}
+	for _, f := range l.Files() {
+		if f.Name == "a" && f.Offset != want {
+			t.Errorf("Files: got offset %d, want %d", f.Offset, want)
 		}
 	}
 }

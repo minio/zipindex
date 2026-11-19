@@ -132,8 +132,7 @@ func (f Files) Serialize() ([]byte, error) {
 			res = append(res, currentVerPlain)
 			return append(res, payload...), nil
 		}
-		res = append(res, currentVerCompressed)
-		return zstdEnc.EncodeAll(payload, res), nil
+		return compress(res, currentVerCompressed, payload)
 	}
 	const chunkN = 25000
 	if len(f) < chunkN {
@@ -168,6 +167,9 @@ func (f Files) Serialize() ([]byte, error) {
 		res, err = ch.MarshalMsg(res)
 		if err != nil {
 			return nil, err
+		}
+		if len(res) > MaxIndexSize {
+			return nil, ErrMaxSizeExceeded
 		}
 		left = left[len(todo):]
 	}
@@ -215,8 +217,20 @@ func (f Files) encodeAoS(res []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	res = append(res, currentVerCompressedStructs)
-	return zstdEnc.EncodeAll(payload, res), nil
+	return compress(res, currentVerCompressedStructs, payload)
+}
+
+// compress appends ver and the zstd-compressed payload to dst.
+// Output that DeserializeFiles would reject returns ErrMaxSizeExceeded.
+func compress(dst []byte, ver byte, payload []byte) ([]byte, error) {
+	if len(payload) > MaxIndexSize {
+		return nil, ErrMaxSizeExceeded
+	}
+	dst = zstdEnc.EncodeAll(payload, append(dst, ver))
+	if len(dst) > MaxIndexSize {
+		return nil, ErrMaxSizeExceeded
+	}
+	return dst, nil
 }
 
 // RemoveInsecurePaths will remove any file with path deemed insecure.

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -84,5 +85,34 @@ func TestSerializeDoesNotModifyInput(t *testing.T) {
 	}
 	if !reflect.DeepEqual(f, want) {
 		t.Fatal("Serialize modified input")
+	}
+}
+
+func TestSerializeMaxSize(t *testing.T) {
+	if testing.Short() {
+		t.Skip("allocates several hundred MiB")
+	}
+	// Compresses well, so only the uncompressed size exceeds the limit.
+	big := map[string]string{"k": strings.Repeat("a", MaxIndexSize)}
+	type3 := make(Files, 10)
+	type3[0].Custom = big
+
+	// Random names don't compress. Each chunk is below the limit, the total is not.
+	rng := rand.New(rand.NewSource(0))
+	type4 := make(Files, 50000)
+	for i := range type4 {
+		name := make([]byte, 2800)
+		rng.Read(name)
+		type4[i].Name = string(name)
+	}
+
+	for name, f := range map[string]Files{
+		"type2": {{Custom: big}},
+		"type3": type3,
+		"type4": type4,
+	} {
+		if _, err := f.Serialize(); err != ErrMaxSizeExceeded {
+			t.Errorf("%s: got error %v, want %v", name, err, ErrMaxSizeExceeded)
+		}
 	}
 }

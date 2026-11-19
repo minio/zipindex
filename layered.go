@@ -51,6 +51,9 @@ func NewLayeredIndex[T comparable]() *LayeredIndex[T] {
 // Returns an error if a layer with the same reference already exists.
 // Files are sorted by name for efficient lookups.
 func (l *LayeredIndex[T]) AddLayer(index Files, ref T) error {
+	if len(l.layers) >= MaxLayers {
+		return ErrTooManyLayers
+	}
 	// Check for duplicate reference
 	for _, layer := range l.layers {
 		if layer.ref == ref {
@@ -72,6 +75,9 @@ func (l *LayeredIndex[T]) AddLayer(index Files, ref T) error {
 // Returns an error if a layer with the same reference already exists.
 // Files are sorted by name for efficient lookups.
 func (l *LayeredIndex[T]) AddDeleteLayer(index Files, ref T) error {
+	if len(l.layers) >= MaxLayers {
+		return ErrTooManyLayers
+	}
 	// Check for duplicate reference
 	for _, layer := range l.layers {
 		if layer.ref == ref {
@@ -523,6 +529,9 @@ func DeserializeLayered[T comparable](data []byte, refSerializer RefSerializer[T
 	numLayers, remaining, err = msgp.ReadUint32Bytes(remaining)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read layer count: %w", err)
+	}
+	if numLayers > MaxLayers {
+		return nil, ErrTooManyLayers
 	}
 
 	// Parse layer data

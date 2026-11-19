@@ -169,10 +169,10 @@ All values are encoded as messagepack types.
 
 The header is two consecutive messagepack values, `Version` then `NumLayers`, with no enclosing array or map.
 
-| Name       | Type   | Description              |
-|------------|--------|--------------------------|
-| Version    | Uint8  | Currently `1`            |
-| NumLayers  | Uint32 | Number of layers         |
+| Name       | Type   | Description                       |
+|------------|--------|-----------------------------------|
+| Version    | Uint8  | Currently `1`                     |
+| NumLayers  | Uint32 | Number of layers, at most 100,000 |
 
 ### Layers
 

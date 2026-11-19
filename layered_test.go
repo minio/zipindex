@@ -19,10 +19,13 @@ package zipindex
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"sort"
 	"testing"
+
+	"github.com/tinylib/msgp/msgp"
 )
 
 // Test basic creation and layer management
@@ -1711,5 +1714,23 @@ func TestLayeredIndex_FindAfterSerializeChunked(t *testing.T) {
 		if name := fmt.Sprintf("f%06d", i); !l.HasFile(name) {
 			t.Fatalf("%s not found after SerializeLayered", name)
 		}
+	}
+}
+
+func TestLayeredIndex_MaxLayers(t *testing.T) {
+	l := NewLayeredIndex[int]()
+	l.layers = make([]layer[int], MaxLayers)
+	if err := l.AddLayer(nil, -1); err != ErrTooManyLayers {
+		t.Errorf("AddLayer: got error %v, want %v", err, ErrTooManyLayers)
+	}
+	if err := l.AddDeleteLayer(nil, -1); err != ErrTooManyLayers {
+		t.Errorf("AddDeleteLayer: got error %v, want %v", err, ErrTooManyLayers)
+	}
+
+	// Must fail before allocating for the claimed layer count.
+	data := msgp.AppendUint32(msgp.AppendUint8(nil, 1), math.MaxUint32)
+	unmarshal := RefSerializer[int]{Unmarshal: func([]byte) (int, error) { return 0, nil }}
+	if _, err := DeserializeLayered(data, unmarshal); err != ErrTooManyLayers {
+		t.Errorf("DeserializeLayered: got error %v, want %v", err, ErrTooManyLayers)
 	}
 }

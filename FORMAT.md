@@ -1,10 +1,10 @@
 # Format Specification
 
-v1.0.0 (August 2022): Initial version (Type 1 + 2)
-v1.1.0: Added Type 3 (columnar format)
-v1.2.0: Added Type 4 (chunked columnar format)
-v1.3.0: Added Layered Index format
-v1.3.1: Added 128MiB serialized size limit and 100,000 layer limit
+- v1.0.0 (August 2022): Initial version (Type 1 + 2)
+- v1.1.0: Added Type 3 (columnar format)
+- v1.2.0: Added Type 4 (chunked columnar format)
+- v1.3.0: Added Layered Index format
+- v1.3.1: Added 128MiB serialized size limit and 100,000 layer limit
 
 The format consists of a single byte indicating the following data.
 

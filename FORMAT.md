@@ -7,6 +7,8 @@ v1.3.0: Added Layered Index format
 
 The format consists of a single byte indicating the following data.
 
+The complete serialized index, including the version byte, must not exceed 128MiB before decompression.
+
 ## Type 1 + 2 
 
 If version is 2, payload is compressed. 

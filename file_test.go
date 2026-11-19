@@ -69,3 +69,20 @@ func BenchmarkFindSerialized(b *testing.B) {
 		})
 	}
 }
+
+func TestSerializeDoesNotModifyInput(t *testing.T) {
+	const n = 60000
+	f := make(Files, n)
+	for i := range f {
+		// Neither name nor offset order, so any in-place sort changes the slice.
+		j := (i * 7919) % n
+		f[i] = File{Name: fmt.Sprintf("f%06d", j), Offset: int64(n-j) * 100, CompressedSize64: 10}
+	}
+	want := append(Files(nil), f...)
+	if _, err := f.Serialize(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(f, want) {
+		t.Fatal("Serialize modified input")
+	}
+}

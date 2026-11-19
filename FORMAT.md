@@ -20,7 +20,7 @@ Type 1+2 contain an array of entries, each with 8 attributes. `[entries][8]attri
 
 Arrays are encoded as regular messagepack arrays.
 
-No more than 100 entries are allowed as type 1+2. The uncompressed serialized data *must* be less than 128MiB.
+No more than 100 entries are allowed as type 1+2. The uncompressed serialized data *must not* exceed 128MiB.
 
 Entries are stored as messagepack types. The values must fit within the bits specified.
 
@@ -48,7 +48,7 @@ The rest of the payload must be decompressed using Zstandard. A maximum window s
 
 Files are stored as an array of arrays. The arrays size of `Names` indicates the number of entries.
 
-The uncompressed serialized data *must* be less than 128MiB. A separate file-count cap of 1 billion entries exists, but the 128MiB size limit will be the binding constraint in practice.
+The uncompressed serialized data *must not* exceed 128MiB. A separate file-count cap of 1 billion entries exists, but the 128MiB size limit will be the binding constraint in practice.
 
 All arrays must have the same number of entries. CRCs must have `entries*4` bytes.
 
@@ -189,6 +189,7 @@ Each layer consists of three consecutive messagepack values:
 The 128MiB limit applies to each `FilesData` on its own. There is no limit on the size of the complete layered index.
 
 Newer layers override older layers for files with the same name.
+If a layer has several entries with the same name, the one with the highest offset is used.
 A delete layer removes matching files from all earlier layers.
 After each delete layer, every directory entry (name ending in `/`) with no remaining entries below it is removed.
 This includes empty directories added by earlier layers, not only parents of deleted files.

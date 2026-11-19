@@ -232,17 +232,10 @@ func (l *LayeredIndex[T]) Files() []FileWithRef[T] {
 
 // binarySearchFile performs a binary search for a file by name in a sorted Files slice.
 func binarySearchFile(files Files, name string) *File {
-	left, right := 0, len(files)-1
-	for left <= right {
-		mid := (left + right) / 2
-		if files[mid].Name == name {
-			return &files[mid]
-		}
-		if files[mid].Name < name {
-			left = mid + 1
-		} else {
-			right = mid - 1
-		}
+	// Duplicate names are sorted by offset. Use the last, like Files() does.
+	i := sort.Search(len(files), func(i int) bool { return files[i].Name > name })
+	if i > 0 && files[i-1].Name == name {
+		return &files[i-1]
 	}
 	return nil
 }

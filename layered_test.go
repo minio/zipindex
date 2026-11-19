@@ -1734,3 +1734,22 @@ func TestLayeredIndex_MaxLayers(t *testing.T) {
 		t.Errorf("DeserializeLayered: got error %v, want %v", err, ErrTooManyLayers)
 	}
 }
+
+func TestLayeredIndex_DuplicateNames(t *testing.T) {
+	l := NewLayeredIndex[int]()
+	if err := l.AddLayer(Files{{Name: "a", Offset: 30}, {Name: "b"}, {Name: "a", Offset: 10}, {Name: "a", Offset: 20}}, 1); err != nil {
+		t.Fatal(err)
+	}
+	const want = 30
+	if f, ok := l.Find("a"); !ok || f.Offset != want {
+		t.Errorf("Find: got %+v, want offset %d", f, want)
+	}
+	if f, ok := l.FindInLayer("a", 1); !ok || f.Offset != want {
+		t.Errorf("FindInLayer: got %+v, want offset %d", f, want)
+	}
+	for _, f := range l.Files() {
+		if f.Name == "a" && f.Offset != want {
+			t.Errorf("Files: got offset %d, want %d", f.Offset, want)
+		}
+	}
+}

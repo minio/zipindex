@@ -7,7 +7,7 @@ v1.3.0: Added Layered Index format
 
 The format consists of a single byte indicating the following data.
 
-The complete serialized index, including the version byte, must not exceed 128MiB before decompression.
+A complete serialized file index (Type 1-4), including the version byte, must not exceed 128MiB before decompression.
 
 ## Type 1 + 2 
 
@@ -184,6 +184,8 @@ Each layer consists of three consecutive messagepack values:
 | Ref       | bin  | Opaque reference blob (application-defined)         |
 | IsDelete  | bool | If true, files in this layer are deletions          |
 | FilesData | bin  | Serialized file index (Type 1/2/3/4 payload)        |
+
+The 128MiB limit applies to each `FilesData` on its own. There is no limit on the size of the complete layered index.
 
 Newer layers override older layers for files with the same name.
 A delete layer removes matching files from all earlier layers.
